@@ -100,3 +100,14 @@ docker-compose.override.yml
 
 *.swp
 *.bak
+
+
+# IntelliJ
+.idea/
+*.iml
+
+# Maven
+target/
+
+# macOS
+.DS_Store
