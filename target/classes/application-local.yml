@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: ai-invoice-analyzer-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/invoice_analyzer?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: MySql@123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update   # use validate in production
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+server:
+  port: 8080
+  ssl:
+    enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.nazir.aiinvoice: DEBUG
