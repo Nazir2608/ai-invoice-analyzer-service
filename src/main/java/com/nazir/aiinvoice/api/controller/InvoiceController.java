@@ -4,7 +4,7 @@ import com.nazir.aiinvoice.api.dto.*;
 import com.nazir.aiinvoice.application.service.InvoiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -13,12 +13,14 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/invoices")
 @RequiredArgsConstructor
+@Slf4j
 public class InvoiceController {
 
     private final InvoiceService service;
 
     @PostMapping
     public ApiResponse<UUID> create(@Valid @RequestBody InvoiceCreateRequest request) {
+        log.info("creating invoice: {}", request);
         UUID id = service.create(request);
         return ApiResponse.<UUID>builder()
                 .success(true)

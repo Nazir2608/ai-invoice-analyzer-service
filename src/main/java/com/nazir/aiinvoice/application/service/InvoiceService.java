@@ -4,13 +4,15 @@ import com.nazir.aiinvoice.api.dto.InvoiceCreateRequest;
 import com.nazir.aiinvoice.api.dto.InvoiceResponse;
 import com.nazir.aiinvoice.api.dto.InvoiceUpdateRequest;
 import com.nazir.aiinvoice.api.dto.PagedResponse;
+import com.nazir.aiinvoice.application.event.InvoiceCreatedEvent;
 import com.nazir.aiinvoice.application.mapper.InvoiceMapper;
 import com.nazir.aiinvoice.domain.model.Invoice;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,23 +27,19 @@ import java.util.UUID;
 public class InvoiceService {
 
     private final InvoiceRepository repository;
+    private final ApplicationEventPublisher eventPublisher;
 
+    @Transactional
     public UUID create(InvoiceCreateRequest request) {
-
         Invoice invoice = InvoiceMapper.toEntity(request);
-
         repository.save(invoice);
-
         log.info("Invoice created with id={}", invoice.getId());
-
+        eventPublisher.publishEvent(new InvoiceCreatedEvent(invoice.getId()));
         return invoice.getId();
     }
 
     public InvoiceResponse get(UUID id) {
-
-        Invoice invoice = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
-
+        Invoice invoice = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
         return InvoiceMapper.toResponse(invoice);
     }
 
