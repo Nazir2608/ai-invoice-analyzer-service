@@ -111,3 +111,5 @@ target/
 
 # macOS
 .DS_Store
+
+.uploads

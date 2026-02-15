@@ -11,7 +11,6 @@ public class InvoiceMapper {
 
     public static Invoice toEntity(InvoiceCreateRequest request) {
         return Invoice.builder()
-                .id(UUID.randomUUID())
                 .vendorName(request.getVendorName())
                 .invoiceNumber(request.getInvoiceNumber())
                 .status(InvoiceStatus.PROCESSING)

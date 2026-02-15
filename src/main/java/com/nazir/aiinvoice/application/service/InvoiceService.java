@@ -6,28 +6,38 @@ import com.nazir.aiinvoice.api.dto.InvoiceUpdateRequest;
 import com.nazir.aiinvoice.api.dto.PagedResponse;
 import com.nazir.aiinvoice.application.event.InvoiceCreatedEvent;
 import com.nazir.aiinvoice.application.mapper.InvoiceMapper;
+import com.nazir.aiinvoice.domain.strategy.StorageStrategy;
 import com.nazir.aiinvoice.domain.model.Invoice;
+import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
 import org.springframework.transaction.annotation.Transactional;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class InvoiceService {
+
+    private static final Logger log = LoggerFactory.getLogger(InvoiceService.class);
 
     private final InvoiceRepository repository;
     private final ApplicationEventPublisher eventPublisher;
+    private final StorageStrategy storageService;
+
+    public InvoiceService(InvoiceRepository repository, ApplicationEventPublisher eventPublisher, StorageStrategy storageService) {
+        this.repository = repository;
+        this.eventPublisher = eventPublisher;
+        this.storageService = storageService;
+    }
 
     @Transactional
     public UUID create(InvoiceCreateRequest request) {
@@ -73,4 +83,18 @@ public class InvoiceService {
         log.info("Invoice deleted with id={}", id);
     }
 
+    @Transactional
+    public UUID createFromFile(MultipartFile file) {
+        // 1. Store file
+        String filePath = storageService.store(file);
+        // 2. Create invoice entity
+        Invoice invoice = Invoice.builder()
+                .fileUrl(filePath)
+                .status(InvoiceStatus.PENDING)
+                .build();
+        repository.save(invoice);
+        log.info("event=invoice_uploaded invoiceId={}", invoice.getId());
+        eventPublisher.publishEvent(new InvoiceCreatedEvent(invoice.getId()));
+        return invoice.getId();
+    }
 }
