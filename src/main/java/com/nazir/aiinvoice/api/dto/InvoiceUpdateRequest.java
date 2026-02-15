@@ -1,23 +1,12 @@
 package com.nazir.aiinvoice.api.dto;
 
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
 public class InvoiceUpdateRequest {
 
     private String vendorName;
     private String invoiceNumber;
-
-    public String getVendorName() {
-        return vendorName;
-    }
-
-    public void setVendorName(String vendorName) {
-        this.vendorName = vendorName;
-    }
-
-    public String getInvoiceNumber() {
-        return invoiceNumber;
-    }
-
-    public void setInvoiceNumber(String invoiceNumber) {
-        this.invoiceNumber = invoiceNumber;
-    }
 }

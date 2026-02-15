@@ -5,24 +5,20 @@ import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.domain.strategy.AiExtractionStrategy;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
 @Service
 @ConditionalOnProperty(name = "ai.provider", havingValue = "mock", matchIfMissing = true)
+@RequiredArgsConstructor
+@Slf4j
 public class MockAiExtractionService implements AiExtractionStrategy {
 
-    private static final Logger log = LoggerFactory.getLogger(MockAiExtractionService.class);
-
     private final InvoiceRepository repository;
-
-    public MockAiExtractionService(InvoiceRepository repository) {
-        this.repository = repository;
-    }
 
     @Override
     public void extract(UUID invoiceId) {

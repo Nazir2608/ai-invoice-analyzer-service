@@ -11,9 +11,9 @@ import com.nazir.aiinvoice.domain.model.Invoice;
 import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,19 +25,13 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class InvoiceService {
-
-    private static final Logger log = LoggerFactory.getLogger(InvoiceService.class);
 
     private final InvoiceRepository repository;
     private final ApplicationEventPublisher eventPublisher;
     private final StorageStrategy storageService;
-
-    public InvoiceService(InvoiceRepository repository, ApplicationEventPublisher eventPublisher, StorageStrategy storageService) {
-        this.repository = repository;
-        this.eventPublisher = eventPublisher;
-        this.storageService = storageService;
-    }
 
     @Transactional
     public UUID create(InvoiceCreateRequest request) {

@@ -3,25 +3,21 @@ package com.nazir.aiinvoice.api.controller;
 import com.nazir.aiinvoice.api.dto.*;
 import com.nazir.aiinvoice.application.service.InvoiceService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/invoices")
+@RequiredArgsConstructor
+@Slf4j
 public class InvoiceController {
 
-    private static final Logger log = LoggerFactory.getLogger(InvoiceController.class);
-
     private final InvoiceService service;
-
-    public InvoiceController(InvoiceService service) {
-        this.service = service;
-    }
 
     @PostMapping
     public ApiResponse<UUID> create(@Valid @RequestBody InvoiceCreateRequest request) {

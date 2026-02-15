@@ -1,20 +1,18 @@
 package com.nazir.aiinvoice.infrastructure.storage;
 
 import com.nazir.aiinvoice.domain.strategy.StorageStrategy;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.UUID;
 
 @Service
 @ConditionalOnProperty(name = "storage.type", havingValue = "local", matchIfMissing = true)
+@Slf4j
 public class FileSystemStorageService implements StorageStrategy {
-
-    private static final Logger log = LoggerFactory.getLogger(FileSystemStorageService.class);
 
     private static final String UPLOAD_DIR = "uploads";
 
