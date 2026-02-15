@@ -18,16 +18,11 @@ public class InvoiceItem extends BaseAuditableEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
     @Column(nullable = false)
     private String name;
-
     private BigDecimal quantity;
-
     private BigDecimal price;
-
     private String category;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "invoice_id", nullable = false)
     private Invoice invoice;
