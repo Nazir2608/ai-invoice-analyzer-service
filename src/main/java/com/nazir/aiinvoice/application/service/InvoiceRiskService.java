@@ -1,0 +1,94 @@
+package com.nazir.aiinvoice.application.service;
+
+import com.nazir.aiinvoice.domain.model.Invoice;
+import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class InvoiceRiskService {
+
+    private final InvoiceRepository repository;
+
+    public void applyRiskChecks(Invoice invoice) {
+        applyDuplicateRisk(invoice);
+        applyAmountMismatchRisk(invoice);
+        applyDueDateRisk(invoice);
+    }
+
+    private void applyDuplicateRisk(Invoice invoice) {
+        if (invoice.getId() == null) {
+            return;
+        }
+
+        String vendorName = invoice.getVendorName();
+        String invoiceNumber = invoice.getInvoiceNumber();
+        BigDecimal totalAmount = invoice.getTotalAmount();
+
+        if (vendorName == null || invoiceNumber == null) {
+            return;
+        }
+
+        boolean duplicateByAllFields = false;
+        if (totalAmount != null) {
+            duplicateByAllFields = repository.existsByVendorNameAndInvoiceNumberAndTotalAmountAndIdNot(
+                    vendorName,
+                    invoiceNumber,
+                    totalAmount,
+                    invoice.getId()
+            );
+        }
+
+        boolean duplicateByBasicFields = repository.existsByVendorNameAndInvoiceNumberAndIdNot(
+                vendorName,
+                invoiceNumber,
+                invoice.getId()
+        );
+
+        if (duplicateByAllFields || duplicateByBasicFields) {
+            addRiskFlag(invoice, "POSSIBLE_DUPLICATE");
+            log.info("event=duplicate_invoice_detected vendorName={} invoiceNumber={} totalAmount={} invoiceId={}",
+                    vendorName, invoiceNumber, totalAmount, invoice.getId());
+        }
+    }
+
+    private void applyAmountMismatchRisk(Invoice invoice) {
+        BigDecimal subtotal = invoice.getSubtotal();
+        BigDecimal taxAmount = invoice.getTaxAmount();
+        BigDecimal totalAmount = invoice.getTotalAmount();
+
+        if (subtotal == null || taxAmount == null || totalAmount == null) {
+            return;
+        }
+
+        BigDecimal calculated = subtotal.add(taxAmount);
+        if (calculated.compareTo(totalAmount) != 0) {
+            addRiskFlag(invoice, "AMOUNT_MISMATCH");
+        }
+    }
+
+    private void applyDueDateRisk(Invoice invoice) {
+        if (invoice.getDueDate() == null) {
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        if (invoice.getDueDate().isBefore(today)) {
+            invoice.setPaymentStatus("OVERDUE");
+        }
+    }
+
+    private void addRiskFlag(Invoice invoice, String flag) {
+        String current = invoice.getRiskFlag();
+        if (current == null || current.isBlank()) {
+            invoice.setRiskFlag(flag);
+        } else if (!current.contains(flag)) {
+            invoice.setRiskFlag(current + "," + flag);
+        }
+    }
+}

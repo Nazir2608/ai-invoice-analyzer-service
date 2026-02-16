@@ -1,0 +1,11 @@
+ACME Corp
+Invoice Number: INV-1001
+Date: 2024-01-10
+Bill To: John Doe
+Subtotal: 100.00
+Tax: 10.00
+Total: 110.00
+
+Description    Quantity    Unit Price    Line Total
+Consulting     5           20.00         100.00
+

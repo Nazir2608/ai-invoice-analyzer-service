@@ -22,6 +22,7 @@ public class InvoiceItem extends BaseAuditableEntity {
     private String name;
     private BigDecimal quantity;
     private BigDecimal price;
+    private BigDecimal lineTotal;
     private String category;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "invoice_id", nullable = false)

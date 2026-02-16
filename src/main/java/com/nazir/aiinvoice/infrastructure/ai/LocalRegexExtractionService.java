@@ -1,5 +1,6 @@
 package com.nazir.aiinvoice.infrastructure.ai;
 
+import com.nazir.aiinvoice.application.service.InvoiceRiskService;
 import com.nazir.aiinvoice.domain.model.Invoice;
 import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
@@ -24,6 +25,7 @@ public class LocalRegexExtractionService implements AiExtractionStrategy {
 
     private final InvoiceRepository repository;
     private final DocumentTextExtractor documentTextExtractor;
+    private final InvoiceRiskService invoiceRiskService;
 
     private static final Pattern INVOICE_NUMBER_PATTERN = Pattern.compile("(?i)invoice[^:0-9]*[:#]?\\s*([a-zA-Z0-9\\-]+)");
     private static final Pattern TOTAL_PATTERN = Pattern.compile("(?i)(total|amount\\s*due|balance\\s*due)\\s*[:.]?\\s*[$€£]?\\s*([\\d,]+\\.?\\d{0,2})");
@@ -47,6 +49,7 @@ public class LocalRegexExtractionService implements AiExtractionStrategy {
             }
             invoice.setExtractedRawText(text);
             parseAndPopulate(invoice, text);
+            invoiceRiskService.applyRiskChecks(invoice);
             invoice.setStatus(InvoiceStatus.COMPLETED);
             repository.save(invoice);
             log.info("event=invoice_extraction_completed invoiceId={} vendor={} total={}", invoiceId, invoice.getVendorName(), invoice.getTotalAmount());

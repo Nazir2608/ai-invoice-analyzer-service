@@ -11,12 +11,13 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
+@Table(name = "invoice")
 @Builder
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Invoice {
+public class Invoice extends BaseAuditableEntity {
 
     @Id
     @GeneratedValue
@@ -34,6 +35,8 @@ public class Invoice {
     private BigDecimal taxAmount;
     private BigDecimal totalAmount;
     private String currency;
+    private String riskFlag;
+    private String paymentStatus;
     @Enumerated(EnumType.STRING)
     private InvoiceStatus status;
 
@@ -41,5 +44,9 @@ public class Invoice {
 
     @Column(columnDefinition = "TEXT")
     private String extractedRawText;
-    private LocalDateTime createdAt;
+    @Column(columnDefinition = "TEXT")
+    private String aiSummary;
+    @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<InvoiceItem> items = new ArrayList<>();
 }

@@ -3,6 +3,7 @@ package com.nazir.aiinvoice.infrastructure.ai;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nazir.aiinvoice.application.service.InvoiceRiskService;
 import com.nazir.aiinvoice.domain.model.Invoice;
 import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
@@ -33,6 +34,7 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
     private final DocumentTextExtractor documentTextExtractor;
     private final ObjectMapper objectMapper;
     private final RestClient.Builder restClientBuilder;
+    private final InvoiceRiskService invoiceRiskService;
 
     @Value("${ai.openai.api-key:}")
     private String apiKey;
@@ -60,6 +62,7 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
             invoice.setExtractedRawText(text);
             String jsonResponse = callOpenAi(text);
             updateInvoiceFromJson(invoice, jsonResponse);
+            invoiceRiskService.applyRiskChecks(invoice);
             invoice.setStatus(InvoiceStatus.COMPLETED);
             repository.save(invoice);
             log.info("event=openai_extraction_completed invoiceId={}", invoiceId);

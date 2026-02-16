@@ -8,6 +8,7 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -33,6 +34,10 @@ public class InvoiceResponse {
     private String currency;
     
     private InvoiceStatus status;
+    private String riskFlag;
+    private String paymentStatus;
+    private String aiSummary;
+    private List<InvoiceLineItemResponse> lineItems;
     private String extractedRawText;
     private LocalDateTime createdAt;
 }

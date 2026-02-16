@@ -3,7 +3,9 @@ package com.nazir.aiinvoice.infrastructure.ai;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nazir.aiinvoice.application.service.InvoiceRiskService;
 import com.nazir.aiinvoice.domain.model.Invoice;
+import com.nazir.aiinvoice.domain.model.InvoiceItem;
 import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.domain.strategy.AiExtractionStrategy;
@@ -33,6 +35,7 @@ public class OllamaExtractionService implements AiExtractionStrategy {
     private final DocumentTextExtractor documentTextExtractor;
     private final ObjectMapper objectMapper;
     private final RestClient.Builder restClientBuilder;
+    private final InvoiceRiskService invoiceRiskService;
 
     @Value("${ai.ollama.url:http://localhost:11434}")
     private String ollamaUrl;
@@ -55,6 +58,9 @@ public class OllamaExtractionService implements AiExtractionStrategy {
             invoice.setExtractedRawText(text);
             String jsonResponse = callOllama(text);
             updateInvoiceFromJson(invoice, jsonResponse);
+            invoiceRiskService.applyRiskChecks(invoice);
+            String summary = generateSummary(text);
+            invoice.setAiSummary(summary);
             invoice.setStatus(InvoiceStatus.COMPLETED);
             repository.save(invoice);
             log.info("event=ollama_extraction_completed invoiceId={}", invoiceId);
@@ -66,7 +72,7 @@ public class OllamaExtractionService implements AiExtractionStrategy {
 
     private String callOllama(String text) {
         String prompt = """
-                Extract the following fields from the invoice text below and return ONLY valid JSON. 
+                Extract the following fields from the invoice text below and return ONLY valid JSON.
                 Do not include markdown formatting (like ```json).
                 Fields:
                 - vendorName
@@ -81,6 +87,11 @@ public class OllamaExtractionService implements AiExtractionStrategy {
                 - taxAmount (number)
                 - totalAmount (number)
                 - currency (ISO code)
+                - lineItems: array of objects with:
+                  - description
+                  - quantity
+                  - unitPrice
+                  - lineTotal
 
                 Text:
                 """ + text;
@@ -148,6 +159,10 @@ public class OllamaExtractionService implements AiExtractionStrategy {
         if (data.has("subtotal")) invoice.setSubtotal(getDecimal(data, "subtotal"));
         if (data.has("taxAmount")) invoice.setTaxAmount(getDecimal(data, "taxAmount"));
         if (data.has("totalAmount")) invoice.setTotalAmount(getDecimal(data, "totalAmount"));
+
+        if (data.has("lineItems")) {
+            populateLineItems(invoice, data.get("lineItems"));
+        }
     }
 
     private String getText(JsonNode node, String field) {
@@ -171,6 +186,66 @@ public class OllamaExtractionService implements AiExtractionStrategy {
             return new BigDecimal(node.path(field).asText());
         } catch (Exception e) {
             log.warn("Failed to parse decimal: {}", node.path(field).asText());
+            return null;
+        }
+    }
+
+    private void populateLineItems(Invoice invoice, JsonNode lineItemsNode) {
+        if (lineItemsNode == null || !lineItemsNode.isArray()) {
+            return;
+        }
+        invoice.getItems().clear();
+        for (JsonNode itemNode : lineItemsNode) {
+            String description = getText(itemNode, "description");
+            BigDecimal quantity = getDecimal(itemNode, "quantity");
+            BigDecimal unitPrice = getDecimal(itemNode, "unitPrice");
+            BigDecimal lineTotal = getDecimal(itemNode, "lineTotal");
+
+            InvoiceItem item = InvoiceItem.builder()
+                    .invoice(invoice)
+                    .name(description)
+                    .quantity(quantity)
+                    .price(unitPrice)
+                    .lineTotal(lineTotal)
+                    .build();
+
+            invoice.getItems().add(item);
+        }
+    }
+
+    private String generateSummary(String text) {
+        try {
+            String prompt = """
+                    Summarize this invoice in 3 sentences:
+                    - What service or product is being billed
+                    - Total amount
+                    - Payment due date
+
+                    Text:
+                    """ + text;
+
+            Map<String, Object> requestBody = Map.of(
+                    "model", model,
+                    "prompt", prompt,
+                    "stream", false
+            );
+
+            String responseBody = restClientBuilder.build()
+                    .post()
+                    .uri(ollamaUrl + "/api/generate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode root = objectMapper.readTree(responseBody);
+            JsonNode responseNode = root.path("response");
+            if (responseNode.isMissingNode()) {
+                return null;
+            }
+            return responseNode.asText().trim();
+        } catch (Exception e) {
+            log.warn("event=ollama_summary_failed", e);
             return null;
         }
     }
