@@ -7,33 +7,23 @@ import com.nazir.aiinvoice.domain.strategy.AiExtractionStrategy;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@Service
+@Service("localExtractionService")
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(name = "ai.provider", havingValue = "local")
-public class LocalExtractionService implements AiExtractionStrategy {
+public class LocalRegexExtractionService implements AiExtractionStrategy {
 
     private final InvoiceRepository repository;
+    private final DocumentTextExtractor documentTextExtractor;
 
     private static final Pattern INVOICE_NUMBER_PATTERN = Pattern.compile("(?i)invoice[^:0-9]*[:#]?\\s*([a-zA-Z0-9\\-]+)");
     private static final Pattern TOTAL_PATTERN = Pattern.compile("(?i)(total|amount\\s*due|balance\\s*due)\\s*[:.]?\\s*[$€£]?\\s*([\\d,]+\\.?\\d{0,2})");
@@ -49,7 +39,7 @@ public class LocalExtractionService implements AiExtractionStrategy {
         Invoice invoice = repository.findById(invoiceId).orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
         log.info("event=invoice_extraction_started invoiceId={}", invoiceId);
         try {
-            String text = extractText(invoice.getFileUrl());
+            String text = documentTextExtractor.extractText(invoice.getFileUrl());
             if (text == null || text.isBlank()) {
                 log.warn("event=empty_text invoiceId={}", invoiceId);
                 markFailed(invoice);
@@ -63,67 +53,6 @@ public class LocalExtractionService implements AiExtractionStrategy {
         } catch (Exception ex) {
             log.error("event=invoice_extraction_failed invoiceId={}", invoiceId, ex);
             markFailed(invoice);
-        }
-    }
-
-    private String extractText(String filePath) throws IOException {
-        File file = new File(filePath);
-        if (!file.exists()) {
-            throw new ResourceNotFoundException("File not found: " + filePath);
-        }
-        String lowerPath = filePath.toLowerCase();
-        if (lowerPath.endsWith(".txt")) {
-            log.info("event=txt_extraction path={}", filePath);
-            return Files.readString(file.toPath());
-        }
-        if (lowerPath.endsWith(".pdf")) {
-            return extractPdfText(file);
-        }
-        if (lowerPath.endsWith(".docx")) {
-            return extractDocxText(file);
-        }
-        log.warn("event=unsupported_file_type path={}", filePath);
-        return null;
-    }
-
-    private String extractPdfText(File file) throws IOException {
-        try {
-            try (PDDocument document = Loader.loadPDF(file)) {
-                PDFTextStripper stripper = new PDFTextStripper();
-                String text = stripper.getText(document);
-                log.info("event=pdf_extracted length={}", text.length());
-                return text;
-            }
-        } catch (IOException e) {
-             log.warn("Standard PDF loading failed: {}", e.getMessage());
-             try (org.apache.pdfbox.io.RandomAccessReadBufferedFile randomAccessFile = new org.apache.pdfbox.io.RandomAccessReadBufferedFile(file)) {
-                 try (PDDocument document = Loader.loadPDF(randomAccessFile)) {
-                     PDFTextStripper stripper = new PDFTextStripper();
-                     return stripper.getText(document);
-                 }
-             } catch (IOException ex) {
-                 log.error("Legacy PDF loading also failed: {}", ex.getMessage());
-                 try {
-                     byte[] bytes = Files.readAllBytes(file.toPath());
-                     try (PDDocument document = Loader.loadPDF(bytes)) {
-                         PDFTextStripper stripper = new PDFTextStripper();
-                         return stripper.getText(document);
-                     }
-                 } catch (Exception exc) {
-                     log.error("Byte array loading failed too: {}", exc.getMessage());
-                     throw ex;
-                 }
-             }
-        }
-    }
-
-    private String extractDocxText(File file) throws IOException {
-        try (FileInputStream fis = new FileInputStream(file);
-             XWPFDocument document = new XWPFDocument(fis);
-             XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
-            String text = extractor.getText();
-            log.info("event=docx_extracted length={}", text.length());
-            return text;
         }
     }
 

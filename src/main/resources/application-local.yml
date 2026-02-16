@@ -26,7 +26,13 @@ logging:
     root: INFO
     com.nazir.aiinvoice: DEBUG
 ai:
-  provider: local
+  provider: ollama # Options: mock, local, openai, hybrid, ollama
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model: gpt-3.5-turbo
+  ollama:
+    url: http://localhost:11434
+    model: gemma3:4b # Using the available model on the system
 
   servlet:
     multipart:

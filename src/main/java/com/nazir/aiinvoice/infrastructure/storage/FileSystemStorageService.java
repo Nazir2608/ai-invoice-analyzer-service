@@ -21,10 +21,8 @@ public class FileSystemStorageService implements StorageStrategy {
         try {
             File dir = new File(System.getProperty("user.dir") + File.separator + UPLOAD_DIR);
             if (!dir.exists()) dir.mkdirs();
-
             File dest = new File(dir.getAbsolutePath() + File.separator + UUID.randomUUID() + "_" + file.getOriginalFilename());
             file.transferTo(dest);
-
             String filePath = dest.getAbsolutePath();
             log.info("event=file_stored path={}", filePath);
             return filePath;

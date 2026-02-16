@@ -12,8 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
-@Service
-@ConditionalOnProperty(name = "ai.provider", havingValue = "mock", matchIfMissing = true)
+@Service("mockExtractionService")
 @RequiredArgsConstructor
 @Slf4j
 public class MockAiExtractionService implements AiExtractionStrategy {

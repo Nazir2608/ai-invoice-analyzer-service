@@ -32,8 +32,14 @@ public class InvoiceController {
     }
 
     @GetMapping("/{id}")
-    public InvoiceResponse get(@PathVariable UUID id) {
-        return service.get(id);
+    public ApiResponse<InvoiceResponse> get(@PathVariable UUID id) {
+        InvoiceResponse response = service.get(id);
+        return ApiResponse.<InvoiceResponse>builder()
+                .success(true)
+                .data(response)
+                .message("Invoice fetched successfully")
+                .timestamp(LocalDateTime.now())
+                .build();
     }
 
     @GetMapping
