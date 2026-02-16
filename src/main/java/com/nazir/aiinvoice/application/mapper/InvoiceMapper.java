@@ -5,8 +5,6 @@ import com.nazir.aiinvoice.api.dto.InvoiceResponse;
 import com.nazir.aiinvoice.domain.model.Invoice;
 import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 
-import java.util.UUID;
-
 public class InvoiceMapper {
 
     public static Invoice toEntity(InvoiceCreateRequest request) {
@@ -21,8 +19,19 @@ public class InvoiceMapper {
         return InvoiceResponse.builder()
                 .id(invoice.getId())
                 .vendorName(invoice.getVendorName())
+                .vendorEmail(invoice.getVendorEmail())
+                .vendorAddress(invoice.getVendorAddress())
+                .billToName(invoice.getBillToName())
+                .billToAddress(invoice.getBillToAddress())
                 .invoiceNumber(invoice.getInvoiceNumber())
+                .invoiceDate(invoice.getInvoiceDate())
+                .dueDate(invoice.getDueDate())
+                .subtotal(invoice.getSubtotal())
+                .taxAmount(invoice.getTaxAmount())
+                .totalAmount(invoice.getTotalAmount())
+                .currency(invoice.getCurrency())
                 .status(invoice.getStatus())
+                .extractedRawText(invoice.getExtractedRawText())
                 .createdAt(invoice.getCreatedAt())
                 .build();
     }

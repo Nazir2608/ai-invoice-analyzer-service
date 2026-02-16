@@ -5,41 +5,41 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "invoices")
+@Builder
 @Getter
 @Setter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Invoice extends BaseAuditableEntity {
+public class Invoice {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue
     private UUID id;
-    @Column(nullable = true)
+
     private String vendorName;
+    private String vendorEmail;
+    private String vendorAddress;
+    private String billToName;
+    private String billToAddress;
     private String invoiceNumber;
     private LocalDate invoiceDate;
+    private LocalDate dueDate;
+    private BigDecimal subtotal;
+    private BigDecimal taxAmount;
     private BigDecimal totalAmount;
+    private String currency;
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private InvoiceStatus status;
-    private String fileUrl;
-    @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<InvoiceItem> items = new ArrayList<>();
 
-    // Helper method to maintain bidirectional relationship
-    public void addItem(InvoiceItem item) {
-        items.add(item);
-        item.setInvoice(this);
-    }
-    public void removeItem(InvoiceItem item) {
-        items.remove(item);
-        item.setInvoice(null);
-    }
+    private String fileUrl;
+
+    @Column(columnDefinition = "TEXT")
+    private String extractedRawText;
+    private LocalDateTime createdAt;
 }
