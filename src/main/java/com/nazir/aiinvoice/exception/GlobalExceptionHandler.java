@@ -23,6 +23,12 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "Validation failed");
     }
 
+    @ExceptionHandler(AiExtractionException.class)
+    public ResponseEntity<?> handleAiExtraction(AiExtractionException ex) {
+
+        return build(HttpStatus.BAD_GATEWAY, ex.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleGeneric(Exception ex) {
 

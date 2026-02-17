@@ -27,7 +27,7 @@ public class FileSystemStorageService implements StorageStrategy {
             log.info("event=file_stored path={}", filePath);
             return filePath;
         } catch (Exception e) {
-            log.error("Failed to store file", e);
+            log.error("event=file_storage_failed fileName={}", file.getOriginalFilename(), e);
             throw new RuntimeException("File storage failed", e);
         }
     }

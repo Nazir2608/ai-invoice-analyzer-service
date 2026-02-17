@@ -26,7 +26,7 @@ public class DocumentTextExtractor {
         String lowerPath = filePath.toLowerCase();
         try {
             if (lowerPath.endsWith(".txt")) {
-                log.info("event=txt_extraction path={}", filePath);
+                log.info("event=text_extraction_txt path={}", filePath);
                 return Files.readString(file.toPath());
             }
             if (lowerPath.endsWith(".pdf")) {
@@ -36,8 +36,8 @@ public class DocumentTextExtractor {
                 return extractDocxText(file);
             }
         } catch (IOException e) {
-            log.error("Failed to extract text from file: {}", filePath, e);
-            throw new RuntimeException("Text extraction failed", e);
+            log.error("event=text_extraction_failed path={}", filePath, e);
+            throw new IllegalStateException("Text extraction failed", e);
         }
         log.warn("event=unsupported_file_type path={}", filePath);
         return null;
@@ -48,26 +48,30 @@ public class DocumentTextExtractor {
             try (PDDocument document = Loader.loadPDF(file)) {
                 PDFTextStripper stripper = new PDFTextStripper();
                 String text = stripper.getText(document);
-                log.info("event=pdf_extracted length={}", text.length());
+                log.info("event=text_extraction_pdf length={}", text.length());
                 return text;
             }
         } catch (IOException e) {
-             log.warn("Standard PDF loading failed: {}", e.getMessage());
+             log.warn("event=pdf_standard_load_failed message={}", e.getMessage());
              try (org.apache.pdfbox.io.RandomAccessReadBufferedFile randomAccessFile = new org.apache.pdfbox.io.RandomAccessReadBufferedFile(file)) {
                  try (PDDocument document = Loader.loadPDF(randomAccessFile)) {
                      PDFTextStripper stripper = new PDFTextStripper();
-                     return stripper.getText(document);
+                     String text = stripper.getText(document);
+                     log.info("event=text_extraction_pdf_random_access length={}", text.length());
+                     return text;
                  }
              } catch (IOException ex) {
-                 log.error("Legacy PDF loading also failed: {}", ex.getMessage());
+                 log.error("event=pdf_random_access_load_failed message={}", ex.getMessage());
                  try {
                      byte[] bytes = Files.readAllBytes(file.toPath());
                      try (PDDocument document = Loader.loadPDF(bytes)) {
                          PDFTextStripper stripper = new PDFTextStripper();
-                         return stripper.getText(document);
+                         String text = stripper.getText(document);
+                         log.info("event=text_extraction_pdf_bytes length={}", text.length());
+                         return text;
                      }
                  } catch (Exception exc) {
-                     log.error("Byte array loading failed too: {}", exc.getMessage());
+                     log.error("event=pdf_bytes_load_failed message={}", exc.getMessage());
                      throw ex;
                  }
              }
@@ -79,7 +83,7 @@ public class DocumentTextExtractor {
              XWPFDocument document = new XWPFDocument(fis);
              XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
             String text = extractor.getText();
-            log.info("event=docx_extracted length={}", text.length());
+            log.info("event=text_extraction_docx length={}", text.length());
             return text;
         }
     }

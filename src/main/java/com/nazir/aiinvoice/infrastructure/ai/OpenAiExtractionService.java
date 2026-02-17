@@ -3,11 +3,15 @@ package com.nazir.aiinvoice.infrastructure.ai;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nazir.aiinvoice.application.mapper.InvoiceJsonMapper;
+import com.nazir.aiinvoice.application.service.InvoiceEventService;
 import com.nazir.aiinvoice.application.service.InvoiceRiskService;
 import com.nazir.aiinvoice.domain.model.Invoice;
+import com.nazir.aiinvoice.domain.model.InvoiceEventType;
 import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.domain.strategy.AiExtractionStrategy;
+import com.nazir.aiinvoice.exception.AiExtractionException;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,9 +22,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -35,6 +36,8 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
     private final ObjectMapper objectMapper;
     private final RestClient.Builder restClientBuilder;
     private final InvoiceRiskService invoiceRiskService;
+    private final InvoiceJsonMapper invoiceJsonMapper;
+    private final InvoiceEventService invoiceEventService;
 
     @Value("${ai.openai.api-key:}")
     private String apiKey;
@@ -53,6 +56,7 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
             return;
         }
         try {
+            invoiceEventService.record(invoiceId, InvoiceEventType.AI_STARTED, "OpenAI extraction started");
             String text = documentTextExtractor.extractText(invoice.getFileUrl());
             if (text == null || text.isBlank()) {
                 log.warn("event=empty_text invoiceId={}", invoiceId);
@@ -60,14 +64,21 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
                 return;
             }
             invoice.setExtractedRawText(text);
+            invoiceEventService.record(invoiceId, InvoiceEventType.TEXT_EXTRACTED, "Text extracted from document");
             String jsonResponse = callOpenAi(text);
             updateInvoiceFromJson(invoice, jsonResponse);
             invoiceRiskService.applyRiskChecks(invoice);
             invoice.setStatus(InvoiceStatus.COMPLETED);
             repository.save(invoice);
             log.info("event=openai_extraction_completed invoiceId={}", invoiceId);
+            invoiceEventService.record(invoiceId, InvoiceEventType.AI_COMPLETED, "OpenAI extraction completed");
+        } catch (AiExtractionException e) {
+            log.error("event=openai_extraction_failed_invalid_response invoiceId={} message={}", invoiceId, e.getMessage());
+            invoiceEventService.record(invoiceId, InvoiceEventType.PROCESSING_FAILED, "OpenAI extraction failed: " + e.getMessage());
+            markFailed(invoice);
         } catch (Exception e) {
             log.error("event=openai_extraction_failed invoiceId={}", invoiceId, e);
+            invoiceEventService.record(invoiceId, InvoiceEventType.PROCESSING_FAILED, "OpenAI extraction failed: " + e.getMessage());
             markFailed(invoice);
         }
     }
@@ -113,59 +124,20 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
 
     private void updateInvoiceFromJson(Invoice invoice, String responseBody) throws JsonProcessingException {
         JsonNode root = objectMapper.readTree(responseBody);
-        JsonNode contentNode = root.path("choices").get(0).path("message").path("content");
+        JsonNode choicesNode = root.path("choices");
+        if (!choicesNode.isArray() || choicesNode.isEmpty()) {
+            throw new AiExtractionException("Invalid OpenAI response: missing choices");
+        }
+
+        JsonNode contentNode = choicesNode.get(0).path("message").path("content");
         if (contentNode.isMissingNode()) {
-            throw new RuntimeException("Invalid OpenAI response format");
+            throw new AiExtractionException("Invalid OpenAI response: missing content");
         }
 
         String content = contentNode.asText();
-        if (content.startsWith("```json")) {
-            content = content.substring(7);
-        }
-        if (content.startsWith("```")) {
-            content = content.substring(3);
-        }
-        if (content.endsWith("```")) {
-            content = content.substring(0, content.length() - 3);
-        }
-        JsonNode data = objectMapper.readTree(content.trim());
-        if (data.has("vendorName")) invoice.setVendorName(getText(data, "vendorName"));
-        if (data.has("vendorEmail")) invoice.setVendorEmail(getText(data, "vendorEmail"));
-        if (data.has("vendorAddress")) invoice.setVendorAddress(getText(data, "vendorAddress"));
-        if (data.has("billToName")) invoice.setBillToName(getText(data, "billToName"));
-        if (data.has("billToAddress")) invoice.setBillToAddress(getText(data, "billToAddress"));
-        if (data.has("invoiceNumber")) invoice.setInvoiceNumber(getText(data, "invoiceNumber"));
-        if (data.has("currency")) invoice.setCurrency(getText(data, "currency"));
-        if (data.has("invoiceDate")) invoice.setInvoiceDate(getDate(data, "invoiceDate"));
-        if (data.has("dueDate")) invoice.setDueDate(getDate(data, "dueDate"));
-        if (data.has("subtotal")) invoice.setSubtotal(getDecimal(data, "subtotal"));
-        if (data.has("taxAmount")) invoice.setTaxAmount(getDecimal(data, "taxAmount"));
-        if (data.has("totalAmount")) invoice.setTotalAmount(getDecimal(data, "totalAmount"));
-    }
-
-    private String getText(JsonNode node, String field) {
-        return node.path(field).isNull() ? null : node.path(field).asText();
-    }
-
-    private LocalDate getDate(JsonNode node, String field) {
-        String text = getText(node, field);
-        if (text == null) return null;
-        try {
-            return LocalDate.parse(text, DateTimeFormatter.ISO_DATE);
-        } catch (Exception e) {
-            log.warn("Failed to parse date: {}", text);
-            return null;
-        }
-    }
-
-    private BigDecimal getDecimal(JsonNode node, String field) {
-        if (node.path(field).isNull()) return null;
-        try {
-            return new BigDecimal(node.path(field).asText());
-        } catch (Exception e) {
-            log.warn("Failed to parse decimal: {}", node.path(field).asText());
-            return null;
-        }
+        String cleaned = invoiceJsonMapper.cleanContent(content);
+        JsonNode data = objectMapper.readTree(cleaned);
+        invoiceJsonMapper.applyBasicFields(invoice, data);
     }
 
     private void markFailed(Invoice invoice) {

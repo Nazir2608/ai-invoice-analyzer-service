@@ -1,6 +1,8 @@
 package com.nazir.aiinvoice.application.service;
 
 import com.nazir.aiinvoice.domain.model.Invoice;
+import com.nazir.aiinvoice.domain.model.InvoiceEventType;
+import com.nazir.aiinvoice.domain.model.InvoiceRiskConstants;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ import java.time.LocalDate;
 public class InvoiceRiskService {
 
     private final InvoiceRepository repository;
+    private final InvoiceEventService invoiceEventService;
 
     public void applyRiskChecks(Invoice invoice) {
         applyDuplicateRisk(invoice);
@@ -52,9 +55,10 @@ public class InvoiceRiskService {
         );
 
         if (duplicateByAllFields || duplicateByBasicFields) {
-            addRiskFlag(invoice, "POSSIBLE_DUPLICATE");
+            addRiskFlag(invoice, InvoiceRiskConstants.RISK_POSSIBLE_DUPLICATE);
             log.info("event=duplicate_invoice_detected vendorName={} invoiceNumber={} totalAmount={} invoiceId={}",
                     vendorName, invoiceNumber, totalAmount, invoice.getId());
+            invoiceEventService.record(invoice.getId(), InvoiceEventType.RISK_FLAG_DUPLICATE, "Possible duplicate detected");
         }
     }
 
@@ -69,7 +73,8 @@ public class InvoiceRiskService {
 
         BigDecimal calculated = subtotal.add(taxAmount);
         if (calculated.compareTo(totalAmount) != 0) {
-            addRiskFlag(invoice, "AMOUNT_MISMATCH");
+            addRiskFlag(invoice, InvoiceRiskConstants.RISK_AMOUNT_MISMATCH);
+            invoiceEventService.record(invoice.getId(), InvoiceEventType.RISK_FLAG_TAX_MISMATCH, "Amount mismatch between subtotal+tax and total");
         }
     }
 
@@ -79,7 +84,7 @@ public class InvoiceRiskService {
         }
         LocalDate today = LocalDate.now();
         if (invoice.getDueDate().isBefore(today)) {
-            invoice.setPaymentStatus("OVERDUE");
+            invoice.setPaymentStatus(InvoiceRiskConstants.PAYMENT_STATUS_OVERDUE);
         }
     }
 

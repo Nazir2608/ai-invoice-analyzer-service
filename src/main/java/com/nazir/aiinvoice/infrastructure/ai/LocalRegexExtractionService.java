@@ -1,7 +1,9 @@
 package com.nazir.aiinvoice.infrastructure.ai;
 
+import com.nazir.aiinvoice.application.service.InvoiceEventService;
 import com.nazir.aiinvoice.application.service.InvoiceRiskService;
 import com.nazir.aiinvoice.domain.model.Invoice;
+import com.nazir.aiinvoice.domain.model.InvoiceEventType;
 import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.domain.strategy.AiExtractionStrategy;
@@ -26,6 +28,7 @@ public class LocalRegexExtractionService implements AiExtractionStrategy {
     private final InvoiceRepository repository;
     private final DocumentTextExtractor documentTextExtractor;
     private final InvoiceRiskService invoiceRiskService;
+    private final InvoiceEventService invoiceEventService;
 
     private static final Pattern INVOICE_NUMBER_PATTERN = Pattern.compile("(?i)invoice[^:0-9]*[:#]?\\s*([a-zA-Z0-9\\-]+)");
     private static final Pattern TOTAL_PATTERN = Pattern.compile("(?i)(total|amount\\s*due|balance\\s*due)\\s*[:.]?\\s*[$€£]?\\s*([\\d,]+\\.?\\d{0,2})");
@@ -40,6 +43,7 @@ public class LocalRegexExtractionService implements AiExtractionStrategy {
     public void extract(UUID invoiceId) {
         Invoice invoice = repository.findById(invoiceId).orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
         log.info("event=invoice_extraction_started invoiceId={}", invoiceId);
+        invoiceEventService.record(invoiceId, InvoiceEventType.AI_STARTED, "Local regex extraction started");
         try {
             String text = documentTextExtractor.extractText(invoice.getFileUrl());
             if (text == null || text.isBlank()) {
@@ -48,13 +52,16 @@ public class LocalRegexExtractionService implements AiExtractionStrategy {
                 return;
             }
             invoice.setExtractedRawText(text);
+            invoiceEventService.record(invoiceId, InvoiceEventType.TEXT_EXTRACTED, "Text extracted from document");
             parseAndPopulate(invoice, text);
             invoiceRiskService.applyRiskChecks(invoice);
             invoice.setStatus(InvoiceStatus.COMPLETED);
             repository.save(invoice);
             log.info("event=invoice_extraction_completed invoiceId={} vendor={} total={}", invoiceId, invoice.getVendorName(), invoice.getTotalAmount());
+            invoiceEventService.record(invoiceId, InvoiceEventType.AI_COMPLETED, "Local regex extraction completed");
         } catch (Exception ex) {
             log.error("event=invoice_extraction_failed invoiceId={}", invoiceId, ex);
+            invoiceEventService.record(invoiceId, InvoiceEventType.PROCESSING_FAILED, "Local regex extraction failed: " + ex.getMessage());
             markFailed(invoice);
         }
     }

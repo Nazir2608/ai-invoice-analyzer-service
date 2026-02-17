@@ -1,6 +1,11 @@
 package com.nazir.aiinvoice.api.controller;
 
-import com.nazir.aiinvoice.api.dto.*;
+import com.nazir.aiinvoice.api.dto.ApiResponse;
+import com.nazir.aiinvoice.api.dto.DashboardResponse;
+import com.nazir.aiinvoice.api.dto.InvoiceCreateRequest;
+import com.nazir.aiinvoice.api.dto.InvoiceResponse;
+import com.nazir.aiinvoice.api.dto.InvoiceUpdateRequest;
+import com.nazir.aiinvoice.api.dto.PagedResponse;
 import com.nazir.aiinvoice.application.service.InvoiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +26,7 @@ public class InvoiceController {
 
     @PostMapping
     public ApiResponse<UUID> create(@Valid @RequestBody InvoiceCreateRequest request) {
-        log.info("creating invoice: {}", request);
+        log.info("event=invoice_create_request vendorName={} invoiceNumber={}", request.getVendorName(), request.getInvoiceNumber());
         UUID id = service.create(request);
         return ApiResponse.<UUID>builder()
                 .success(true)
@@ -53,6 +58,17 @@ public class InvoiceController {
                 .build();
     }
 
+    @GetMapping("/dashboard")
+    public ApiResponse<DashboardResponse> dashboard() {
+        DashboardResponse response = service.getDashboard();
+        return ApiResponse.<DashboardResponse>builder()
+                .success(true)
+                .data(response)
+                .message("Dashboard data fetched successfully")
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
     @PutMapping("/{id}")
     public ApiResponse<String> update(@PathVariable UUID id, @RequestBody InvoiceUpdateRequest request) {
         service.update(id, request);
@@ -77,8 +93,7 @@ public class InvoiceController {
 
     @PostMapping(value = "/upload", consumes = "multipart/form-data")
     public ApiResponse<UUID> upload(@RequestParam("file") MultipartFile file) {
-        log.info("Upload endpoint hit. File name={}", file.getOriginalFilename());
-        log.info("uploading invoice..");
+        log.info("event=invoice_upload_request fileName={} size={}", file.getOriginalFilename(), file.getSize());
         UUID id = service.createFromFile(file);
         return ApiResponse.<UUID>builder()
                 .success(true)
@@ -87,5 +102,4 @@ public class InvoiceController {
                 .timestamp(LocalDateTime.now())
                 .build();
     }
-
 }

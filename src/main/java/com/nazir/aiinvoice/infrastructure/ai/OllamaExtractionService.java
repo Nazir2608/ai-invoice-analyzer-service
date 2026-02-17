@@ -3,12 +3,15 @@ package com.nazir.aiinvoice.infrastructure.ai;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nazir.aiinvoice.application.mapper.InvoiceJsonMapper;
+import com.nazir.aiinvoice.application.service.InvoiceEventService;
 import com.nazir.aiinvoice.application.service.InvoiceRiskService;
 import com.nazir.aiinvoice.domain.model.Invoice;
-import com.nazir.aiinvoice.domain.model.InvoiceItem;
+import com.nazir.aiinvoice.domain.model.InvoiceEventType;
 import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.domain.strategy.AiExtractionStrategy;
+import com.nazir.aiinvoice.exception.AiExtractionException;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +39,8 @@ public class OllamaExtractionService implements AiExtractionStrategy {
     private final ObjectMapper objectMapper;
     private final RestClient.Builder restClientBuilder;
     private final InvoiceRiskService invoiceRiskService;
+    private final InvoiceJsonMapper invoiceJsonMapper;
+    private final InvoiceEventService invoiceEventService;
 
     @Value("${ai.ollama.url:http://localhost:11434}")
     private String ollamaUrl;
@@ -48,6 +53,7 @@ public class OllamaExtractionService implements AiExtractionStrategy {
     public void extract(UUID invoiceId) {
         Invoice invoice = repository.findById(invoiceId).orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
         log.info("event=ollama_extraction_started invoiceId={}", invoiceId);
+        invoiceEventService.record(invoiceId, InvoiceEventType.AI_STARTED, "Ollama extraction started");
         try {
             String text = documentTextExtractor.extractText(invoice.getFileUrl());
             if (text == null || text.isBlank()) {
@@ -56,6 +62,7 @@ public class OllamaExtractionService implements AiExtractionStrategy {
                 return;
             }
             invoice.setExtractedRawText(text);
+            invoiceEventService.record(invoiceId, InvoiceEventType.TEXT_EXTRACTED, "Text extracted from document");
             String jsonResponse = callOllama(text);
             updateInvoiceFromJson(invoice, jsonResponse);
             invoiceRiskService.applyRiskChecks(invoice);
@@ -64,8 +71,13 @@ public class OllamaExtractionService implements AiExtractionStrategy {
             invoice.setStatus(InvoiceStatus.COMPLETED);
             repository.save(invoice);
             log.info("event=ollama_extraction_completed invoiceId={}", invoiceId);
+        } catch (AiExtractionException e) {
+            log.error("event=ollama_extraction_failed_invalid_response invoiceId={} message={}", invoiceId, e.getMessage());
+            invoiceEventService.record(invoiceId, InvoiceEventType.PROCESSING_FAILED, "Ollama extraction failed: " + e.getMessage());
+            markFailed(invoice);
         } catch (Exception e) {
             log.error("event=ollama_extraction_failed invoiceId={}", invoiceId, e);
+            invoiceEventService.record(invoiceId, InvoiceEventType.PROCESSING_FAILED, "Ollama extraction failed: " + e.getMessage());
             markFailed(invoice);
         }
     }
@@ -120,96 +132,22 @@ public class OllamaExtractionService implements AiExtractionStrategy {
         
         String content;
         if (responseNode.isMissingNode()) {
-             // Sometimes Ollama might return the content directly or in a different structure depending on version/model
-             // But standard Ollama /api/generate returns "response" field
-             // If not found, let's try to parse root as the response if it's not a structured API response
-             if (root.has("vendorName")) {
-                 content = responseBody; 
-             } else {
-                 throw new RuntimeException("Invalid Ollama response format: " + responseBody);
-             }
+            if (root.has("vendorName")) {
+                content = responseBody;
+            } else {
+                throw new AiExtractionException("Invalid Ollama response format");
+            }
         } else {
             content = responseNode.asText();
         }
 
-        // Clean up markdown if present
-        if (content.startsWith("```json")) {
-            content = content.substring(7);
-        }
-        if (content.startsWith("```")) {
-            content = content.substring(3);
-        }
-        if (content.endsWith("```")) {
-            content = content.substring(0, content.length() - 3);
-        }
+        String cleaned = invoiceJsonMapper.cleanContent(content);
+        JsonNode data = objectMapper.readTree(cleaned);
 
-        JsonNode data = objectMapper.readTree(content.trim());
-
-        if (data.has("vendorName")) invoice.setVendorName(getText(data, "vendorName"));
-        if (data.has("vendorEmail")) invoice.setVendorEmail(getText(data, "vendorEmail"));
-        if (data.has("vendorAddress")) invoice.setVendorAddress(getText(data, "vendorAddress"));
-        if (data.has("billToName")) invoice.setBillToName(getText(data, "billToName"));
-        if (data.has("billToAddress")) invoice.setBillToAddress(getText(data, "billToAddress"));
-        if (data.has("invoiceNumber")) invoice.setInvoiceNumber(getText(data, "invoiceNumber"));
-        if (data.has("currency")) invoice.setCurrency(getText(data, "currency"));
-
-        if (data.has("invoiceDate")) invoice.setInvoiceDate(getDate(data, "invoiceDate"));
-        if (data.has("dueDate")) invoice.setDueDate(getDate(data, "dueDate"));
-
-        if (data.has("subtotal")) invoice.setSubtotal(getDecimal(data, "subtotal"));
-        if (data.has("taxAmount")) invoice.setTaxAmount(getDecimal(data, "taxAmount"));
-        if (data.has("totalAmount")) invoice.setTotalAmount(getDecimal(data, "totalAmount"));
+        invoiceJsonMapper.applyBasicFields(invoice, data);
 
         if (data.has("lineItems")) {
-            populateLineItems(invoice, data.get("lineItems"));
-        }
-    }
-
-    private String getText(JsonNode node, String field) {
-        return node.path(field).isNull() ? null : node.path(field).asText();
-    }
-
-    private LocalDate getDate(JsonNode node, String field) {
-        String text = getText(node, field);
-        if (text == null) return null;
-        try {
-            return LocalDate.parse(text, DateTimeFormatter.ISO_DATE);
-        } catch (Exception e) {
-            log.warn("Failed to parse date: {}", text);
-            return null;
-        }
-    }
-
-    private BigDecimal getDecimal(JsonNode node, String field) {
-        if (node.path(field).isNull()) return null;
-        try {
-            return new BigDecimal(node.path(field).asText());
-        } catch (Exception e) {
-            log.warn("Failed to parse decimal: {}", node.path(field).asText());
-            return null;
-        }
-    }
-
-    private void populateLineItems(Invoice invoice, JsonNode lineItemsNode) {
-        if (lineItemsNode == null || !lineItemsNode.isArray()) {
-            return;
-        }
-        invoice.getItems().clear();
-        for (JsonNode itemNode : lineItemsNode) {
-            String description = getText(itemNode, "description");
-            BigDecimal quantity = getDecimal(itemNode, "quantity");
-            BigDecimal unitPrice = getDecimal(itemNode, "unitPrice");
-            BigDecimal lineTotal = getDecimal(itemNode, "lineTotal");
-
-            InvoiceItem item = InvoiceItem.builder()
-                    .invoice(invoice)
-                    .name(description)
-                    .quantity(quantity)
-                    .price(unitPrice)
-                    .lineTotal(lineTotal)
-                    .build();
-
-            invoice.getItems().add(item);
+            invoiceJsonMapper.applyLineItems(invoice, data.get("lineItems"));
         }
     }
 
