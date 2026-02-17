@@ -42,6 +42,8 @@ public class LocalRegexExtractionService implements AiExtractionStrategy {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void extract(UUID invoiceId) {
         Invoice invoice = repository.findById(invoiceId).orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
+        invoice.setStatus(InvoiceStatus.PROCESSING);
+        repository.save(invoice);
         log.info("event=invoice_extraction_started invoiceId={}", invoiceId);
         invoiceEventService.record(invoiceId, InvoiceEventType.AI_STARTED, "Local regex extraction started");
         try {
@@ -54,7 +56,11 @@ public class LocalRegexExtractionService implements AiExtractionStrategy {
             invoice.setExtractedRawText(text);
             invoiceEventService.record(invoiceId, InvoiceEventType.TEXT_EXTRACTED, "Text extracted from document");
             parseAndPopulate(invoice, text);
+            invoice.setStatus(InvoiceStatus.AI_COMPLETED);
+            repository.save(invoice);
             invoiceRiskService.applyRiskChecks(invoice);
+            invoice.setStatus(InvoiceStatus.RISK_ANALYZED);
+            repository.save(invoice);
             invoice.setStatus(InvoiceStatus.COMPLETED);
             repository.save(invoice);
             log.info("event=invoice_extraction_completed invoiceId={} vendor={} total={}", invoiceId, invoice.getVendorName(), invoice.getTotalAmount());

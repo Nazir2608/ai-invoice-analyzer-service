@@ -17,7 +17,7 @@ public class InvoiceMapper {
         return Invoice.builder()
                 .vendorName(request.getVendorName())
                 .invoiceNumber(request.getInvoiceNumber())
-                .status(InvoiceStatus.PROCESSING)
+                .status(InvoiceStatus.UPLOADED)
                 .build();
     }
 
@@ -40,6 +40,9 @@ public class InvoiceMapper {
                 .riskFlag(invoice.getRiskFlag())
                 .paymentStatus(invoice.getPaymentStatus())
                 .aiSummary(invoice.getAiSummary())
+                .aiConfidenceScore(invoice.getAiConfidenceScore())
+                .requiresManualReview(invoice.getRequiresManualReview())
+                .reviewReason(invoice.getReviewReason())
                 .lineItems(toLineItemResponses(invoice.getItems()))
                 .extractedRawText(invoice.getExtractedRawText())
                 .createdAt(invoice.getCreatedAt())

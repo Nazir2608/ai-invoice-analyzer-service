@@ -30,6 +30,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID>, JpaSpec
 
     long countByPaymentStatus(String paymentStatus);
 
-    @Query("select count(i) from Invoice i where (i.riskFlag is not null and i.riskFlag <> '') or i.status <> com.nazir.aiinvoice.domain.model.InvoiceStatus.COMPLETED")
+    @Query("select count(i) from Invoice i where i.requiresManualReview = true or (i.riskFlag is not null and i.riskFlag <> '') or i.status <> com.nazir.aiinvoice.domain.model.InvoiceStatus.COMPLETED")
     long countRequiresReview();
 }

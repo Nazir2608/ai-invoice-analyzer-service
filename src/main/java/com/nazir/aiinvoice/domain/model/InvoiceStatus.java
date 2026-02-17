@@ -2,8 +2,10 @@ package com.nazir.aiinvoice.domain.model;
 
 public enum InvoiceStatus {
 
-    PENDING,
+    UPLOADED,
     PROCESSING,
+    AI_COMPLETED,
+    RISK_ANALYZED,
     COMPLETED,
     FAILED
 

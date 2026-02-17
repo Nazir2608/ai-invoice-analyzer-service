@@ -37,6 +37,9 @@ public class InvoiceResponse {
     private String riskFlag;
     private String paymentStatus;
     private String aiSummary;
+    private Integer aiConfidenceScore;
+    private Boolean requiresManualReview;
+    private String reviewReason;
     private List<InvoiceLineItemResponse> lineItems;
     private String extractedRawText;
     private LocalDateTime createdAt;

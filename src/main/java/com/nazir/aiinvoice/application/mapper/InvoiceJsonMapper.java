@@ -31,6 +31,7 @@ public class InvoiceJsonMapper {
         if (data.has("subtotal")) invoice.setSubtotal(getDecimal(data, "subtotal"));
         if (data.has("taxAmount")) invoice.setTaxAmount(getDecimal(data, "taxAmount"));
         if (data.has("totalAmount")) invoice.setTotalAmount(getDecimal(data, "totalAmount"));
+        if (data.has("confidenceScore")) invoice.setAiConfidenceScore(getInteger(data, "confidenceScore"));
     }
 
     public void applyLineItems(Invoice invoice, JsonNode lineItemsNode) {
@@ -94,5 +95,14 @@ public class InvoiceJsonMapper {
             return null;
         }
     }
-}
 
+    private Integer getInteger(JsonNode node, String field) {
+        if (node.path(field).isNull()) return null;
+        try {
+            return Integer.parseInt(node.path(field).asText());
+        } catch (Exception e) {
+            log.warn("Failed to parse integer: {}", node.path(field).asText());
+            return null;
+        }
+    }
+}

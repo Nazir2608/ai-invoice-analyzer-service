@@ -49,6 +49,8 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void extract(UUID invoiceId) {
         Invoice invoice = repository.findById(invoiceId).orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
+        invoice.setStatus(InvoiceStatus.PROCESSING);
+        repository.save(invoice);
         log.info("event=openai_extraction_started invoiceId={}", invoiceId);
         if (apiKey == null || apiKey.isBlank()) {
             log.error("event=openai_api_key_missing invoiceId={}", invoiceId);
@@ -67,7 +69,11 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
             invoiceEventService.record(invoiceId, InvoiceEventType.TEXT_EXTRACTED, "Text extracted from document");
             String jsonResponse = callOpenAi(text);
             updateInvoiceFromJson(invoice, jsonResponse);
+            invoice.setStatus(InvoiceStatus.AI_COMPLETED);
+            repository.save(invoice);
             invoiceRiskService.applyRiskChecks(invoice);
+            invoice.setStatus(InvoiceStatus.RISK_ANALYZED);
+            repository.save(invoice);
             invoice.setStatus(InvoiceStatus.COMPLETED);
             repository.save(invoice);
             log.info("event=openai_extraction_completed invoiceId={}", invoiceId);
@@ -100,6 +106,7 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
                 - taxAmount (number)
                 - totalAmount (number)
                 - currency (ISO code)
+                - confidenceScore (integer 0-100 indicating overall extraction confidence)
 
                 Text:
                 """ + text;

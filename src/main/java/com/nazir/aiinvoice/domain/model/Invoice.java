@@ -37,6 +37,10 @@ public class Invoice extends BaseAuditableEntity {
     private String currency;
     private String riskFlag;
     private String paymentStatus;
+    private Integer aiConfidenceScore;
+    private Boolean requiresManualReview;
+    @Column(columnDefinition = "TEXT")
+    private String reviewReason;
     @Enumerated(EnumType.STRING)
     private InvoiceStatus status;
 

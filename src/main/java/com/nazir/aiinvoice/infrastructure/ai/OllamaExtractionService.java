@@ -52,6 +52,8 @@ public class OllamaExtractionService implements AiExtractionStrategy {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void extract(UUID invoiceId) {
         Invoice invoice = repository.findById(invoiceId).orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
+        invoice.setStatus(InvoiceStatus.PROCESSING);
+        repository.save(invoice);
         log.info("event=ollama_extraction_started invoiceId={}", invoiceId);
         invoiceEventService.record(invoiceId, InvoiceEventType.AI_STARTED, "Ollama extraction started");
         try {
@@ -65,9 +67,13 @@ public class OllamaExtractionService implements AiExtractionStrategy {
             invoiceEventService.record(invoiceId, InvoiceEventType.TEXT_EXTRACTED, "Text extracted from document");
             String jsonResponse = callOllama(text);
             updateInvoiceFromJson(invoice, jsonResponse);
-            invoiceRiskService.applyRiskChecks(invoice);
             String summary = generateSummary(text);
             invoice.setAiSummary(summary);
+            invoice.setStatus(InvoiceStatus.AI_COMPLETED);
+            repository.save(invoice);
+            invoiceRiskService.applyRiskChecks(invoice);
+            invoice.setStatus(InvoiceStatus.RISK_ANALYZED);
+            repository.save(invoice);
             invoice.setStatus(InvoiceStatus.COMPLETED);
             repository.save(invoice);
             log.info("event=ollama_extraction_completed invoiceId={}", invoiceId);
@@ -104,6 +110,7 @@ public class OllamaExtractionService implements AiExtractionStrategy {
                   - quantity
                   - unitPrice
                   - lineTotal
+                - confidenceScore (integer 0-100 indicating overall extraction confidence)
 
                 Text:
                 """ + text;

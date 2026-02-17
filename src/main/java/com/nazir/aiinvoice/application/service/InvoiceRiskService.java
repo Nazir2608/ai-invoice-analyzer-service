@@ -23,6 +23,7 @@ public class InvoiceRiskService {
         applyDuplicateRisk(invoice);
         applyAmountMismatchRisk(invoice);
         applyDueDateRisk(invoice);
+        applyAiConfidenceRisk(invoice);
     }
 
     private void applyDuplicateRisk(Invoice invoice) {
@@ -75,6 +76,7 @@ public class InvoiceRiskService {
         if (calculated.compareTo(totalAmount) != 0) {
             addRiskFlag(invoice, InvoiceRiskConstants.RISK_AMOUNT_MISMATCH);
             invoiceEventService.record(invoice.getId(), InvoiceEventType.RISK_FLAG_TAX_MISMATCH, "Amount mismatch between subtotal+tax and total");
+            markManualReview(invoice, "Tax/amount mismatch between subtotal+tax and total");
         }
     }
 
@@ -88,6 +90,13 @@ public class InvoiceRiskService {
         }
     }
 
+    private void applyAiConfidenceRisk(Invoice invoice) {
+        Integer confidence = invoice.getAiConfidenceScore();
+        if (confidence != null && confidence < 70) {
+            markManualReview(invoice, "Low AI confidence: " + confidence);
+        }
+    }
+
     private void addRiskFlag(Invoice invoice, String flag) {
         String current = invoice.getRiskFlag();
         if (current == null || current.isBlank()) {
@@ -95,5 +104,16 @@ public class InvoiceRiskService {
         } else if (!current.contains(flag)) {
             invoice.setRiskFlag(current + "," + flag);
         }
+    }
+
+    private void markManualReview(Invoice invoice, String reason) {
+        invoice.setRequiresManualReview(true);
+        String current = invoice.getReviewReason();
+        if (current == null || current.isBlank()) {
+            invoice.setReviewReason(reason);
+        } else if (!current.contains(reason)) {
+            invoice.setReviewReason(current + "; " + reason);
+        }
+        log.info("event=manual_review_flagged invoiceId={} reason={}", invoice.getId(), reason);
     }
 }

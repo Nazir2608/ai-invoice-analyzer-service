@@ -89,7 +89,7 @@ public class InvoiceService {
         String filePath = storageService.store(file);
         Invoice invoice = Invoice.builder()
                 .fileUrl(filePath)
-                .status(InvoiceStatus.PENDING)
+                .status(InvoiceStatus.UPLOADED)
                 .build();
         repository.save(invoice);
         log.info("event=invoice_uploaded invoiceId={}", invoice.getId());
