@@ -564,7 +564,7 @@ Best for getting started quickly without running Kafka or Ollama.
 **Commands**
 
 ```bash
-git clone https://github.com/<your-org>/ai-invoice-analyzer-service.git
+git clone https://github.com/<Nazir2608>/ai-invoice-analyzer-service.git
 cd ai-invoice-analyzer-service
 
 mvn clean install
