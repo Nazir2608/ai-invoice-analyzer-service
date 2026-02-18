@@ -11,7 +11,7 @@ It ingests invoices, extracts structured data using AI, analyzes risk, applies m
 - [1. High‑Level Overview](#1-high-level-overview)
 - [2. Architecture & Project Structure](#2-architecture--project-structure)
 - [3. Core Flows](#3-core-flows)
-  - [3.1 Invoice Upload & Async Processing](#31-invoice-upload--async-processing)
+  - [3.1 Invoice Upload & Processing Modes](#31-invoice-upload--processing-modes)
   - [3.2 AI Extraction & Risk Analysis](#32-ai-extraction--risk-analysis)
   - [3.3 Dashboard & Analytics](#33-dashboard--analytics)
   - [3.4 Audit Trail](#34-audit-trail)
@@ -19,7 +19,9 @@ It ingests invoices, extracts structured data using AI, analyzes risk, applies m
 - [5. Configuration](#5-configuration)
 - [6. API Overview](#6-api-overview)
 - [7. Observability & Logging](#7-observability--logging)
-- [8. Running the Project Locally](#8-running-the-project-locally)
+- [8. Running the Project](#8-running-the-project)
+  - [8.1 Local Mode (no Kafka, local AI)](#81-local-mode-no-kafka-local-ai)
+  - [8.2 Docker Mode (Kafka + Ollama/OpenAI)](#82-docker-mode-kafka--ollamaopenai)
 - [9. Design Patterns](#9-design-patterns)
 - [10. Future Enhancements](#10-future-enhancements)
 
@@ -86,16 +88,20 @@ src/main/java/com/nazir/aiinvoice
  │   ├── kafka           # InvoiceEventProducer, InvoiceEventConsumer
  │   └── storage         # FileSystemStorageService (local filesystem)
  ├── config              # AiStrategyConfig and other wiring
- └── exception           # Global exception handling
+└── exception           # Global exception handling
 ```
 
 ---
 
 ## 3. Core Flows
 
-### 3.1 Invoice Upload & Async Processing
+### 3.1 Invoice Upload & Processing Modes
 
-High‑level flow for file upload:
+The upload flow is the same entrypoint but can run in two modes depending on configuration.
+
+#### Local mode (no Kafka, fully in‑process)
+
+Used for simple local development with no Kafka or Docker.
 
 ```text
 Client
@@ -104,15 +110,43 @@ Client
 InvoiceController
       ↓
 InvoiceService.createFromFile()
-  - Store file using StorageStrategy (local filesystem)
+  - Store file via StorageStrategy (local filesystem)
   - Create Invoice with status = UPLOADED
-  - Publish Kafka event "invoice-uploaded"
+  - Publish InvoiceCreatedEvent (domain event)
       ↓
-InvoiceEventProducer (Kafka)
+InvoiceProcessingOrchestrator (AFTER_COMMIT, @Async)
+  - Calls AiExtractionStrategy.extract(invoiceId)
+      ↓
+AiExtractionStrategy (local / openai / ollama)
+  - Updates invoice fields
+  - Invokes InvoiceRiskService
+  - Progresses status to COMPLETED
+```
+
+#### Kafka / Docker mode (event‑driven)
+
+Used when Kafka is enabled (e.g. Docker stack with Ollama/OpenAI).
+
+```text
+Client
+  → POST /api/invoices/upload
+      ↓
+InvoiceController
+      ↓
+InvoiceService.createFromFile()
+  - Store file via StorageStrategy (local filesystem)
+  - Create Invoice with status = UPLOADED
+  - Publish InvoiceUploadedEvent
+      ↓
+InvoiceUploadKafkaPublisher (AFTER_COMMIT)
+  - Sends Kafka message to topic "invoice-uploaded"
       ↓
 InvoiceEventConsumer (Kafka Listener)
   - Idempotency: if invoice.status == COMPLETED → skip
   - Delegate to AiExtractionStrategy.extract(invoiceId)
+      ↓
+AiExtractionStrategy (local / openai / ollama)
+  - Same extraction + risk flow as above
 ```
 
 ### 3.2 AI Extraction & Risk Analysis
@@ -221,17 +255,34 @@ Key fields:
 
 ## 5. Configuration
 
+## 5. Configuration
+
 ### Profiles
 
-The project primarily uses the `local` profile for development:
+- Default dev profile: `local` (see `src/main/resources/application-local.yml`).
+- Docker profile: `docker` (set via `SPRING_PROFILES_ACTIVE=docker` in `docker-compose.yml`).
 
-```text
-spring.profiles.active=local
-```
+### AI provider and Kafka matrix
 
-You can add `docker`, `prod`, etc. as needed.
+The main toggles:
 
-### Key Properties (local)
+- `ai.provider` – which extraction strategy to use.
+- `app.kafka-enabled` – whether Kafka integration is active.
+
+| Mode            | Profile  | `ai.provider` | `app.kafka-enabled` | Kafka required | External AI        |
+|----------------|----------|---------------|---------------------|----------------|--------------------|
+| Local only      | `local`  | `local`       | `false`             | No             | No                 |
+| Local + Kafka   | `local`  | `local`       | `true`              | Yes            | No                 |
+| OpenAI (local)  | `local`  | `openai`      | `true` or `false`   | Optional       | OpenAI API         |
+| Ollama (local)  | `local`  | `ollama`      | `true` or `false`   | Optional       | Local Ollama       |
+| Docker + Ollama | `docker` | `ollama`      | `true` (default)    | Yes (container)| Ollama container   |
+| Docker + OpenAI | `docker` | `openai`      | `true` (default)    | Yes (container)| OpenAI API         |
+
+If `app.kafka-enabled=false`, all Kafka producer/consumer beans are disabled and file upload goes through the in‑process `InvoiceProcessingOrchestrator`.
+
+### Local profile configuration (excerpt)
+
+From `application-local.yml`:
 
 ```yaml
 spring:
@@ -239,6 +290,10 @@ spring:
     url: jdbc:mysql://localhost:3306/invoice_analyzer?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
     username: root
     password: MySql@123
+
+  jpa:
+    hibernate:
+      ddl-auto: update
 
   kafka:
     bootstrap-servers: localhost:9092
@@ -253,21 +308,79 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
+app:
+  kafka-enabled: false
+
 ai:
-  provider: ollama   # mock | local | openai | hybrid | ollama
+  provider: local          # local | openai | ollama
   openai:
     api-key: ${OPENAI_API_KEY:}
+    model: gpt-3.5-turbo
   ollama:
     url: http://localhost:11434
+    model: gemma3:4b
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
 ```
 
-Storage currently uses the local filesystem via `FileSystemStorageService` (`storage.type=local` by default).
+Storage uses the local filesystem via `FileSystemStorageService` by default.
+
+### Docker / docker-compose configuration (excerpt)
+
+From `docker-compose.yml`:
+
+```yaml
+services:
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: MySql@123
+      MYSQL_DATABASE: invoice_analyzer
+    ports:
+      - "3308:3306"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: invoice-kafka
+    ports:
+      - "9092:9092"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: invoice-ollama
+    ports:
+      - "11434:11434"
+
+  invoice-app:
+    build: .
+    container_name: ai-invoice-analyzer-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/invoice_analyzer?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: MySql@123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: invoice-kafka:9092
+
+      # AI provider for Docker mode
+      AI_PROVIDER: ollama          # local | openai | ollama
+      AI_OLLAMA_URL: http://ollama:11434
+      AI_OLLAMA_MODEL: gemma3:4b
+
+    ports:
+      - "8080:8080"
+```
+
+To use OpenAI in Docker:
+
+- Change `AI_PROVIDER: openai`.
+- Add `OPENAI_API_KEY` to `invoice-app.environment`.
 
 ---
 
@@ -348,6 +461,52 @@ With `spring-boot-starter-actuator` and the management config, you get:
 - `GET /actuator/health`
 - `GET /actuator/info`
 - `GET /actuator/metrics`
+- `GET /actuator/prometheus` (for Prometheus scraping)
+
+### Prometheus & Grafana (Docker)
+
+When you run via `docker compose up --build`, the stack also includes:
+
+- **Prometheus** (`invoice-prometheus`) on `http://localhost:9090`
+- **Grafana** (`invoice-grafana`) on `http://localhost:3000`
+
+Prometheus is configured via `prometheus.yml` to scrape:
+
+- Target: `invoice-app:8080`
+- Path: `/actuator/prometheus`
+
+In the Docker profile, actuator exposure is enabled via the environment variable:
+
+```yaml
+MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus
+```
+
+Basic Grafana setup:
+
+1. Open `http://localhost:3000` in your browser.
+2. Log in with:
+   - User: `admin`
+   - Password: `admin`
+3. Add a Prometheus data source:
+   - Type: Prometheus
+   - URL: `http://prometheus:9090`
+4. Save & Test.
+
+You can now build dashboards using metrics such as:
+
+- `invoice_upload_consumed_total`
+- `invoice_ollama_extraction_seconds_count`
+- `invoice_ollama_extraction_seconds_sum`
+- `invoice_duplicate_total`
+
+Example panels you can create:
+
+- Active DB connections
+- HTTP requests per second
+- Kafka consumer lag
+- Live JVM threads
+- Process CPU %
+- JVM heap usage
 
 These are useful for Docker/Kubernetes health checks and monitoring.
 
@@ -363,29 +522,99 @@ These are useful for Docker/Kubernetes health checks and monitoring.
 
 ---
 
-## 8. Running the Project Locally
+## 8. Running the Project
 
-### Prerequisites
+This section covers both local setup (no Docker) and full Docker setup.
+
+### 8.1 Local Mode (no Kafka, local AI)
+
+Best for getting started quickly without running Kafka or Ollama.
+
+**Prerequisites**
 
 - Java 21
 - Maven 3.9+
-- MySQL database `invoice_analyzer`
-- Kafka broker on `localhost:9092`
-- Optional:
-  - Ollama running on `http://localhost:11434` (for `ai.provider=ollama`)
-  - An OpenAI API key (for `ai.provider=openai`)
+- MySQL database `invoice_analyzer` on `localhost:3306`
 
-### Commands
+**Configuration**
+
+- `spring.profiles.active=local` (already set in `application.yml`).
+- In `application-local.yml`:
+  - `app.kafka-enabled: false`
+  - `ai.provider: local`
+
+**Commands**
 
 ```bash
+git clone https://github.com/<your-org>/ai-invoice-analyzer-service.git
+cd ai-invoice-analyzer-service
+
 mvn clean install
-mvn spring-boot:run
+mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 Application:
 
 - API base: `http://localhost:8080`
 - Health: `http://localhost:8080/actuator/health`
+
+In this mode:
+
+- File upload calls `LocalRegexExtractionService`.
+- Kafka beans are disabled; no connection is made to `localhost:9092`.
+
+### 8.2 Docker Mode (Kafka + Ollama/OpenAI)
+
+This mode runs the full stack (MySQL + Kafka + Ollama + app) using Docker.
+
+**Prerequisites**
+
+- Docker and Docker Compose installed.
+
+**Commands**
+
+From the project root:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- `invoice-mysql` (MySQL 8, port `3308` on host).
+- `invoice-zookeeper` + `invoice-kafka` (Kafka broker on `localhost:9092`).
+- `invoice-ollama` (Ollama server on `http://localhost:11434`).
+- `ai-invoice-analyzer-service` (Spring Boot app on `http://localhost:8080`).
+
+**Default Docker AI mode (Ollama)**
+
+- `AI_PROVIDER=ollama`
+- `AI_OLLAMA_URL=http://ollama:11434`
+- `AI_OLLAMA_MODEL=gemma3:4b`
+
+Inside the `invoice-ollama` container, pull the model once:
+
+```bash
+docker exec -it invoice-ollama ollama pull gemma3:4b
+```
+
+**Switching to OpenAI in Docker**
+
+Edit `docker-compose.yml` `invoice-app.environment`:
+
+```yaml
+AI_PROVIDER: openai
+OPENAI_API_KEY: your-key-here
+```
+
+Then restart:
+
+```bash
+docker compose down
+docker compose up --build
+```
+
+Now AI extraction uses OpenAI instead of Ollama.
 
 ---
 
@@ -405,7 +634,6 @@ Application:
 
 - Rich UI dashboard for finance/operations teams
 - JWT/OAuth2 security
-- Prometheus/Grafana integration
 - Dead Letter Queue (DLQ) and advanced retry policies
 - Multi-tenant support
 
