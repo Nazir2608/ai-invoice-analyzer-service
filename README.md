@@ -18,6 +18,7 @@ It ingests invoices, extracts structured data using AI, analyzes risk, applies m
 - [4. Domain Model](#4-domain-model)
 - [5. Configuration](#5-configuration)
 - [6. API Overview](#6-api-overview)
+  - [6.1 OpenAPI / Swagger UI](#61-openapi--swagger-ui)
 - [7. Observability & Logging](#7-observability--logging)
 - [8. Running the Project](#8-running-the-project)
   - [8.1 Local Mode (no Kafka, local AI)](#81-local-mode-no-kafka-local-ai)
@@ -394,6 +395,23 @@ All responses are wrapped in `ApiResponse<T>`:
 - `timestamp`
 
 Base path: `/api/invoices`
+
+### 6.1 OpenAPI / Swagger UI
+
+The project uses Springdoc OpenAPI to expose machine-readable API docs and an interactive Swagger UI.
+
+- OpenAPI JSON: `GET /v3/api-docs`
+- Swagger UI: `GET /swagger-ui/index.html`
+
+When running locally:
+
+- Base URL: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+
+When running via Docker compose:
+
+- Base URL: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
 ### Create Invoice
 
