@@ -10,7 +10,15 @@ import com.nazir.aiinvoice.application.service.InvoiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -48,7 +56,8 @@ public class InvoiceController {
     }
 
     @GetMapping
-    public ApiResponse<PagedResponse<InvoiceResponse>> list(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
+    public ApiResponse<PagedResponse<InvoiceResponse>> list(
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
         PagedResponse<InvoiceResponse> result = service.list(page, size);
         return ApiResponse.<PagedResponse<InvoiceResponse>>builder()
                 .success(true)

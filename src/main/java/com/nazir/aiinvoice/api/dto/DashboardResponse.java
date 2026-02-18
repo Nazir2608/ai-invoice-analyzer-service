@@ -17,4 +17,3 @@ public class DashboardResponse {
     private long overdueCount;
     private long requiresReviewCount;
 }
-
