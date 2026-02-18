@@ -1,203 +1,298 @@
-#  AI Invoice Analyzer Service
+# AI Invoice Analyzer Service
 
-A production-ready, modular monolith backend service built using **Spring Boot 3** for managing and processing invoices with AI-based data extraction and categorization.
+A production-grade **Invoice Intelligence Platform** built on **Spring Boot 3 / Java 21**.
 
-This project demonstrates clean architecture, enterprise coding standards, audit support, pagination, strategy patterns, and event-driven processing.
-
----
-
-#  Table of Contents
-
-- [Project Overview](#project-overview)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Features](#features)
-- [System Flow](#system-flow)
-- [Invoice Status Lifecycle](#invoice-status-lifecycle)
-- [API Endpoints](#api-endpoints)
-- [Configuration](#configuration)
-- [Database Design](#database-design)
-- [Audit Support](#audit-support)
-- [Logging & Exception Handling](#logging--exception-handling)
-- [Testing Strategy](#testing-strategy)
-- [Running the Project](#running-the-project)
-- [Docker Support](#docker-support)
-- [Design Patterns Used](#design-patterns-used)
-- [Future Enhancements](#future-enhancements)
-- [Author](#author)
+It ingests invoices, extracts structured data using AI, analyzes risk, applies manual review rules, and exposes analytics dashboards and audit trails.
 
 ---
 
-#  Project Overview
+## Table of Contents
 
-AI Invoice Analyzer Service provides:
-
-- 📄 Invoice CRUD operations
-- 📤 Invoice file upload (PDF/Image)
-- 🤖 AI-based structured data extraction
-- 🏷️ Automatic categorization of invoice items
-- 📊 Pagination & sorting support
-- 📝 Audit tracking (createdAt, createdBy, updatedAt, updatedBy)
-- ⚙️ Property-driven AI provider switching
-- 🧾 Global exception handling
-- 📦 Docker-ready deployment
-
-The system is designed as a **Clean Modular Monolith** and is extensible to microservices in the future.
+- [1. High‑Level Overview](#1-high-level-overview)
+- [2. Architecture & Project Structure](#2-architecture--project-structure)
+- [3. Core Flows](#3-core-flows)
+  - [3.1 Invoice Upload & Async Processing](#31-invoice-upload--async-processing)
+  - [3.2 AI Extraction & Risk Analysis](#32-ai-extraction--risk-analysis)
+  - [3.3 Dashboard & Analytics](#33-dashboard--analytics)
+  - [3.4 Audit Trail](#34-audit-trail)
+- [4. Domain Model](#4-domain-model)
+- [5. Configuration](#5-configuration)
+- [6. API Overview](#6-api-overview)
+- [7. Observability & Logging](#7-observability--logging)
+- [8. Running the Project Locally](#8-running-the-project-locally)
+- [9. Design Patterns](#9-design-patterns)
+- [10. Future Enhancements](#10-future-enhancements)
 
 ---
 
-#  Architecture
+## 1. High‑Level Overview
 
-This project follows **Clean Layered Architecture**:
+This service provides:
 
+- Invoice CRUD APIs
+- Invoice file upload (PDF/Office documents)
+- AI-based field extraction (invoice number, vendor, amounts, dates, etc.)
+- Risk analysis (duplicate detection, amount/tax mismatch, overdue detection)
+- AI confidence scoring and **manual review flow**
+- Dashboard metrics for operations teams
+- Full audit trail of processing events
+- Kafka-based asynchronous processing
+- Health, metrics, and structured logs for production observability
+
+Tech stack:
+
+- **Java 21**, **Spring Boot 3.2**
+- **MySQL** (JPA/Hibernate)
+- **Kafka** (producer + consumer)
+- **Ollama / OpenAI / Local Regex** for extraction
+- **Maven** for build
+
+---
+
+## 2. Architecture & Project Structure
+
+The codebase is organized as a **clean modular monolith**:
+
+```text
+api → application → domain → infrastructure → config → exception
 ```
-api → application → domain → infrastructure → config
-```
 
-## Layer Responsibilities
+### Layer Responsibilities
 
-| Layer | Responsibility |
-|--------|----------------|
-| api | REST Controllers & DTOs |
-| application | Business logic & orchestration |
-| domain | Core entities & interfaces |
-| infrastructure | AI, storage, messaging implementations |
-| config | Configuration & conditional beans |
-| exception | Global error handling |
+| Layer        | Responsibility                                                |
+|-------------|----------------------------------------------------------------|
+| `api`       | REST controllers, DTOs, API response wrapper                  |
+| `application` | Use cases, services, orchestration, risk rules              |
+| `domain`    | Entities, enums, repositories, core business abstractions     |
+| `infrastructure` | AI clients, storage implementation, Kafka, text extraction |
+| `config`    | Bean wiring, strategy selection (`ai.provider`, etc.)         |
+| `exception` | Global error handling and API error model                     |
 
----
+### Package Structure (simplified)
 
-#  Project Structure
-
-```
-ai-invoice-analyzer-service
+```text
+src/main/java/com/nazir/aiinvoice
  ├── api
+ │   ├── controller      # REST endpoints (InvoiceController)
+ │   └── dto             # Request/response DTOs
  ├── application
+ │   ├── mapper          # Mapping JSON/DTOs <-> domain
+ │   └── service         # InvoiceService, InvoiceRiskService, InvoiceEventService, ...
  ├── domain
+ │   ├── model           # Invoice, InvoiceItem, InvoiceEvent, InvoiceStatus, ...
+ │   └── repository      # Spring Data JPA repositories
  ├── infrastructure
- ├── config
- ├── exception
- ├── docs
- └── README.md
+ │   ├── ai              # LocalRegex, OpenAI, Ollama, Hybrid, Mock extraction services
+ │   ├── kafka           # InvoiceEventProducer, InvoiceEventConsumer
+ │   └── storage         # FileSystemStorageService (local filesystem)
+ ├── config              # AiStrategyConfig and other wiring
+ └── exception           # Global exception handling
 ```
 
 ---
 
-#  Features
+## 3. Core Flows
 
-##  Invoice Management
+### 3.1 Invoice Upload & Async Processing
 
-- Create invoice
-- Update invoice
-- Delete invoice
-- Fetch invoice by ID
-- Paginated invoice listing
-- Sorting support
+High‑level flow for file upload:
 
----
-
-##  AI Extraction (Strategy Pattern)
-
-Supports multiple AI providers:
-
-```
-ai.provider = mock | openai
-```
-
-Switch providers without changing code.
-
----
-
-##  Categorization Strategy
-
-Supports:
-
-- Rule-based categorization
-- AI-based categorization
-
----
-
-##  Pagination & Sorting
-
-Example request:
-
-```
-GET /api/invoices?page=0&size=10&sort=createdAt,desc
-```
-
-Example response:
-
-```json
-{
-  "content": [],
-  "page": 0,
-  "size": 10,
-  "totalElements": 100,
-  "totalPages": 10
-}
-```
-
----
-
-#  System Flow
-
-## Invoice Creation & Processing Flow
-
-```
+```text
 Client
-   ↓
+  → POST /api/invoices/upload
+      ↓
 InvoiceController
-   ↓
-InvoiceService
-   ↓
-InvoiceRepository
-   ↓
-Database
-   ↓
-InvoiceCreatedEvent
-   ↓
-InvoiceProcessingOrchestrator
-   ↓
-AiExtractionStrategy
-   ↓
-CategorizationStrategy
-   ↓
-Update Invoice Status → COMPLETED
+      ↓
+InvoiceService.createFromFile()
+  - Store file using StorageStrategy (local filesystem)
+  - Create Invoice with status = UPLOADED
+  - Publish Kafka event "invoice-uploaded"
+      ↓
+InvoiceEventProducer (Kafka)
+      ↓
+InvoiceEventConsumer (Kafka Listener)
+  - Idempotency: if invoice.status == COMPLETED → skip
+  - Delegate to AiExtractionStrategy.extract(invoiceId)
 ```
+
+### 3.2 AI Extraction & Risk Analysis
+
+AI extraction is routed via a strategy:
+
+- Configured in `AiStrategyConfig`.
+- Selected using the property `ai.provider`:
+
+```text
+ai.provider = mock | local | openai | hybrid | ollama
+```
+
+Supported strategies:
+
+- `mock` – simple mock for demos
+- `local` – regex‑based extractor (no external AI dependency)
+- `openai` – calls OpenAI Chat Completions API
+- `ollama` – calls local Ollama instance over HTTP
+- `hybrid` – local first, then escalate to OpenAI if data is insufficient
+
+Extraction flow (for AI providers):
+
+```text
+1. Set invoice.status = PROCESSING
+2. Extract raw text from file (PDF/Word/etc.)
+3. Call AI model → JSON with invoice fields + confidenceScore
+4. Map JSON to Invoice (InvoiceJsonMapper)
+5. Apply risk checks (InvoiceRiskService)
+   - Duplicate detection
+   - Amount/tax mismatch
+   - Overdue payment
+   - Low AI confidence
+6. Update manual review flags (requiresManualReview, reviewReason)
+7. Progress status:
+   UPLOADED → PROCESSING → AI_COMPLETED → RISK_ANALYZED → COMPLETED
+```
+
+**AI Confidence & Manual Review Rules**
+
+The `Invoice` entity includes:
+
+- `Integer aiConfidenceScore`
+- `Boolean requiresManualReview`
+- `String reviewReason`
+
+Manual review is triggered when:
+
+- Duplicate invoice detected
+- Tax/amount mismatch
+- `aiConfidenceScore < 70`
+
+### 3.3 Dashboard & Analytics
+
+Endpoint:
+
+```http
+GET /api/invoices/dashboard
+```
+
+Response model (`DashboardResponse`):
+
+- `totalInvoices` – total count of invoices
+- `totalAmount` – sum of all invoice totals
+- `duplicateCount` – invoices flagged as possible duplicates
+- `overdueCount` – overdue invoices
+- `requiresReviewCount` – invoices that need manual review or are not fully completed
+
+### 3.4 Audit Trail
+
+Every important step writes to `invoice_event` via `InvoiceEventService`:
+
+- Entity: `InvoiceEvent` (id, invoiceId, eventType, message, timestamps)
+- Enum: `InvoiceEventType` (e.g. `FILE_UPLOADED`, `TEXT_EXTRACTED`, `AI_STARTED`, `AI_COMPLETED`, `RISK_FLAG_DUPLICATE`, `RISK_FLAG_TAX_MISMATCH`, `PROCESSING_FAILED`, ...)
+
+This gives a **processing timeline** for each invoice.
 
 ---
 
-#  Invoice Status Lifecycle
+## 4. Domain Model
 
-Enum values:
+### Invoice
 
-- PROCESSING
-- COMPLETED
-- FAILED
+Key fields:
 
-Flow:
+- `id` (UUID)
+- `vendorName`, `invoiceNumber`, `invoiceDate`, `dueDate`
+- `subtotal`, `taxAmount`, `totalAmount`, `currency`
+- `status` (`InvoiceStatus` enum)
+  - `UPLOADED`, `PROCESSING`, `AI_COMPLETED`, `RISK_ANALYZED`, `COMPLETED`, `FAILED`
+- `riskFlag`, `paymentStatus`
+- `aiConfidenceScore`, `requiresManualReview`, `reviewReason`
+- `fileUrl`, `extractedRawText`, `aiSummary`
+- Audit fields from `BaseAuditableEntity`
 
-```
-CREATE → PROCESSING → COMPLETED
-```
+### InvoiceItem
 
-If error occurs:
+- `id` (UUID)
+- `invoice` (Many‑to‑One to `Invoice`)
+- `name`, `quantity`, `price`, `lineTotal`, `category`
 
-```
-PROCESSING → FAILED
-```
+### InvoiceEvent
+
+- `id` (UUID)
+- `invoiceId` (UUID)
+- `eventType` (`InvoiceEventType`)
+- `message`
+- Audit timestamps
 
 ---
 
-#  API Endpoints
+## 5. Configuration
 
-## Create Invoice
+### Profiles
 
+The project primarily uses the `local` profile for development:
+
+```text
+spring.profiles.active=local
 ```
+
+You can add `docker`, `prod`, etc. as needed.
+
+### Key Properties (local)
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/invoice_analyzer?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: MySql@123
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: invoice-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+ai:
+  provider: ollama   # mock | local | openai | hybrid | ollama
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+  ollama:
+    url: http://localhost:11434
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+```
+
+Storage currently uses the local filesystem via `FileSystemStorageService` (`storage.type=local` by default).
+
+---
+
+## 6. API Overview
+
+All responses are wrapped in `ApiResponse<T>`:
+
+- `success`
+- `data`
+- `message`
+- `timestamp`
+
+Base path: `/api/invoices`
+
+### Create Invoice
+
+```http
 POST /api/invoices
+Content-Type: application/json
 ```
-
-Request:
 
 ```json
 {
@@ -206,267 +301,117 @@ Request:
 }
 ```
 
----
+### Get Invoice
 
-## Get Invoice
-
-```
+```http
 GET /api/invoices/{id}
 ```
 
----
+### List Invoices (paged)
 
-## List Invoices
-
-```
+```http
 GET /api/invoices?page=0&size=10
 ```
 
----
+### Update Invoice
 
-## Update Invoice
-
-```
+```http
 PUT /api/invoices/{id}
 ```
 
----
+### Delete Invoice
 
-## Delete Invoice
-
-```
+```http
 DELETE /api/invoices/{id}
 ```
 
----
+### Upload Invoice File
 
-## Upload Invoice File
-
+```http
+POST /api/invoices/upload
+Content-Type: multipart/form-data
 ```
-POST /api/invoices/{id}/upload
-```
 
----
+Form field:
 
-# ⚙️ Configuration
+- `file`: invoice file (PDF/doc)
 
-## Profiles
+### Dashboard
 
-- local
-- prod
-
-Set active profile:
-
-```
-spring.profiles.active=local
+```http
+GET /api/invoices/dashboard
 ```
 
 ---
 
-## AI Provider Switching
+## 7. Observability & Logging
 
-```
-ai.provider=mock
-```
+### Actuator
 
-or
+With `spring-boot-starter-actuator` and the management config, you get:
 
-```
-ai.provider=openai
-```
+- `GET /actuator/health`
+- `GET /actuator/info`
+- `GET /actuator/metrics`
 
----
+These are useful for Docker/Kubernetes health checks and monitoring.
 
-## Storage Switching
+### Logging
 
-```
-storage.type=memory
-```
-
-or
-
-```
-storage.type=s3
-```
+- Event‑centric log style such as:
+  - `event=invoice_upload_request`
+  - `event=invoice_uploaded_published`
+  - `event=invoice_uploaded_consumed`
+  - `event=openai_extraction_started`
+  - `event=duplicate_message_skipped`
+- Makes it easy to trace invoice lifecycles in logs and debug issues.
 
 ---
 
-# 🗄️ Database Design
+## 8. Running the Project Locally
 
-## Table: invoices
+### Prerequisites
 
-| Column | Type |
-|---------|--------|
-| id | UUID |
-| vendor_name | VARCHAR |
-| invoice_number | VARCHAR |
-| invoice_date | DATE |
-| total_amount | DECIMAL |
-| status | VARCHAR |
-| file_url | VARCHAR |
-| created_at | TIMESTAMP |
-| created_by | VARCHAR |
-| updated_at | TIMESTAMP |
-| updated_by | VARCHAR |
+- Java 21
+- Maven 3.9+
+- MySQL database `invoice_analyzer`
+- Kafka broker on `localhost:9092`
+- Optional:
+  - Ollama running on `http://localhost:11434` (for `ai.provider=ollama`)
+  - An OpenAI API key (for `ai.provider=openai`)
 
----
+### Commands
 
-## Table: invoice_items
-
-| Column | Type |
-|---------|--------|
-| id | UUID |
-| invoice_id | UUID |
-| name | VARCHAR |
-| quantity | DECIMAL |
-| price | DECIMAL |
-| category | VARCHAR |
-
----
-
-#  Audit Support
-
-All entities extend a base auditable class including:
-
-- createdAt
-- createdBy
-- updatedAt
-- updatedBy
-
-Automatically populated using JPA lifecycle hooks.
-
----
-
-#  Logging & Exception Handling
-
-## Logging
-
-- Uses SLF4J
-- Logs invoice creation
-- Logs AI processing
-- Logs status transitions
-- Logs errors
-
-Example:
-
-```
-Invoice created with id={}
-AI processing started for invoice={}
-```
-
----
-
-## Global Exception Handling
-
-All exceptions are handled centrally.
-
-Example response:
-
-```json
-{
-  "status": 404,
-  "error": "Invoice not found",
-  "timestamp": "2026-02-14T10:30:00"
-}
-```
-
----
-
-#  Testing Strategy
-
-- Unit tests for service layer
-- Integration tests using H2
-- Future:
-    - TestContainers
-    - Kafka integration tests
-
-Run tests:
-
-```
-mvn test
-```
-
----
-
-#  Running the Project
-
-## Run Locally
-
-```
+```bash
 mvn clean install
 mvn spring-boot:run
 ```
 
-Application runs at:
+Application:
 
-```
-http://localhost:8080
-```
-
----
-
-#  Docker Support
-
-Future-ready for:
-
-- PostgreSQL
-- Kafka
-- MinIO
-- Application container
-
-Run:
-
-```
-docker-compose up --build
-```
+- API base: `http://localhost:8080`
+- Health: `http://localhost:8080/actuator/health`
 
 ---
 
-#  Design Patterns Used
+## 9. Design Patterns
 
-| Pattern | Purpose |
-|----------|----------|
-| Strategy | AI & Categorization |
-| Repository | Data access |
-| Observer | Event-driven processing |
-| Factory (Spring Conditional) | Property-based switching |
-| Mapper | DTO conversion |
+| Pattern   | Purpose                                                     |
+|----------|-------------------------------------------------------------|
+| Strategy | `AiExtractionStrategy`, `CategorizationStrategy`           |
+| Repository | Data access via Spring Data JPA                          |
+| Observer | Event-driven processing via Kafka and domain events        |
+| Factory  | `AiStrategyConfig` selects AI provider based on properties |
+| Mapper   | DTO and JSON mapping (`InvoiceMapper`, `InvoiceJsonMapper`)|
 
 ---
 
-#  Future Enhancements
+## 10. Future Enhancements
 
-- Kafka-based async processing
-- Retry & Dead Letter Queue
+- Rich UI dashboard for finance/operations teams
+- JWT/OAuth2 security
+- Prometheus/Grafana integration
+- Dead Letter Queue (DLQ) and advanced retry policies
 - Multi-tenant support
-- JWT security
-- Observability (Prometheus & Grafana)
-- Idempotency handling
-- Duplicate invoice detection
 
----
-
-#  Author
-
-Nazir  
-Backend Engineer | Java | Spring Boot | AI-driven Systems
-
----
-
-#  Why This Project?
-
-This project demonstrates:
-
-- Clean architecture
-- Enterprise backend design
-- Extensibility via patterns
-- Production readiness
-- AI integration capability
-
-Ideal for:
-
-- Senior backend interviews
-- SaaS product foundation
-- Portfolio showcase
-
----
+This project is designed as a clean, production‑ready backend foundation for an **Invoice Intelligence Platform**.

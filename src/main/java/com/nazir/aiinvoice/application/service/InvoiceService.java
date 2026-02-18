@@ -7,7 +7,7 @@ import com.nazir.aiinvoice.api.dto.InvoiceUpdateRequest;
 import com.nazir.aiinvoice.api.dto.PagedResponse;
 import com.nazir.aiinvoice.application.event.InvoiceCreatedEvent;
 import com.nazir.aiinvoice.application.mapper.InvoiceMapper;
-import com.nazir.aiinvoice.application.service.InvoiceEventService;
+import com.nazir.aiinvoice.application.event.InvoiceUploadedEvent;
 import com.nazir.aiinvoice.domain.model.Invoice;
 import com.nazir.aiinvoice.domain.model.InvoiceEventType;
 import com.nazir.aiinvoice.domain.model.InvoiceRiskConstants;
@@ -15,6 +15,7 @@ import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.domain.strategy.StorageStrategy;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
+import com.nazir.aiinvoice.infrastructure.kafka.InvoiceEventProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -38,6 +39,7 @@ public class InvoiceService {
     private final ApplicationEventPublisher eventPublisher;
     private final StorageStrategy storageService;
     private final InvoiceEventService invoiceEventService;
+    private final InvoiceEventProducer invoiceEventProducer;
 
     @Transactional
     public UUID create(InvoiceCreateRequest request) {
@@ -93,7 +95,7 @@ public class InvoiceService {
                 .build();
         repository.save(invoice);
         log.info("event=invoice_uploaded invoiceId={}", invoice.getId());
-        eventPublisher.publishEvent(new InvoiceCreatedEvent(invoice.getId()));
+        eventPublisher.publishEvent(new InvoiceUploadedEvent(invoice.getId()));
         invoiceEventService.record(invoice.getId(), InvoiceEventType.FILE_UPLOADED, "File uploaded and invoice created");
         return invoice.getId();
     }

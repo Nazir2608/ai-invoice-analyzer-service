@@ -4,6 +4,9 @@ import com.nazir.aiinvoice.domain.model.Invoice;
 import com.nazir.aiinvoice.domain.model.InvoiceEventType;
 import com.nazir.aiinvoice.domain.model.InvoiceRiskConstants;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +21,15 @@ public class InvoiceRiskService {
 
     private final InvoiceRepository repository;
     private final InvoiceEventService invoiceEventService;
+    private final MeterRegistry meterRegistry;
+    private Counter duplicateCounter;
+
+    @PostConstruct
+    void initMetrics() {
+        duplicateCounter = Counter.builder("invoice.duplicate.total")
+                .description("Total duplicate invoices detected")
+                .register(meterRegistry);
+    }
 
     public void applyRiskChecks(Invoice invoice) {
         applyDuplicateRisk(invoice);
@@ -60,6 +72,9 @@ public class InvoiceRiskService {
             log.info("event=duplicate_invoice_detected vendorName={} invoiceNumber={} totalAmount={} invoiceId={}",
                     vendorName, invoiceNumber, totalAmount, invoice.getId());
             invoiceEventService.record(invoice.getId(), InvoiceEventType.RISK_FLAG_DUPLICATE, "Possible duplicate detected");
+            if (duplicateCounter != null) {
+                duplicateCounter.increment();
+            }
         }
     }
 

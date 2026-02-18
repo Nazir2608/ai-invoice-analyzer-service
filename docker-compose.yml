@@ -1,0 +1,97 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8
+    container_name: invoice-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: MySql@123
+      MYSQL_DATABASE: invoice_analyzer
+    ports:
+      - "3308:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pMySql@123"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: invoice-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: invoice-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z localhost 9092 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: invoice-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+  invoice-app:
+    build: .
+    container_name: ai-invoice-analyzer-service
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      ollama:
+        condition: service_started
+    environment:
+      # Spring profile
+      SPRING_PROFILES_ACTIVE: docker
+
+      # Database (matches your current MySQL config, just using container host)
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/invoice_analyzer?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: MySql@123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+
+      # Kafka
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: invoice-kafka:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: invoice-group
+      SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET: earliest
+      SPRING_KAFKA_CONSUMER_KEY_DESERIALIZER: org.apache.kafka.common.serialization.StringDeserializer
+      SPRING_KAFKA_CONSUMER_VALUE_DESERIALIZER: org.springframework.kafka.support.serializer.JsonDeserializer
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_TRUSTED_PACKAGES: "*"
+      SPRING_KAFKA_PRODUCER_KEY_SERIALIZER: org.apache.kafka.common.serialization.StringSerializer
+      SPRING_KAFKA_PRODUCER_VALUE_SERIALIZER: org.springframework.kafka.support.serializer.JsonSerializer
+
+      # AI settings – override host to use Docker service name
+      AI_PROVIDER: ollama
+      AI_OLLAMA_URL: http://ollama:11434
+      AI_OLLAMA_MODEL: gemma3:4b
+
+    ports:
+      - "8080:8080"
+    restart: on-failure:5
+
+volumes:
+  ollama-data:

@@ -12,6 +12,9 @@ import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.domain.strategy.AiExtractionStrategy;
 import com.nazir.aiinvoice.exception.AiExtractionException;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PostConstruct;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,12 +44,21 @@ public class OllamaExtractionService implements AiExtractionStrategy {
     private final InvoiceRiskService invoiceRiskService;
     private final InvoiceJsonMapper invoiceJsonMapper;
     private final InvoiceEventService invoiceEventService;
+    private final MeterRegistry meterRegistry;
+    private Timer ollamaTimer;
 
     @Value("${ai.ollama.url:http://localhost:11434}")
     private String ollamaUrl;
     
     @Value("${ai.ollama.model:llama3}")
     private String model;
+
+    @PostConstruct
+    void initMetrics() {
+        ollamaTimer = Timer.builder("invoice.ollama.extraction.seconds")
+                .description("Time taken for AI extraction")
+                .register(meterRegistry);
+    }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -65,7 +77,9 @@ public class OllamaExtractionService implements AiExtractionStrategy {
             }
             invoice.setExtractedRawText(text);
             invoiceEventService.record(invoiceId, InvoiceEventType.TEXT_EXTRACTED, "Text extracted from document");
-            String jsonResponse = callOllama(text);
+            String jsonResponse = ollamaTimer != null
+                    ? ollamaTimer.record(() -> callOllama(text))
+                    : callOllama(text);
             updateInvoiceFromJson(invoice, jsonResponse);
             String summary = generateSummary(text);
             invoice.setAiSummary(summary);
