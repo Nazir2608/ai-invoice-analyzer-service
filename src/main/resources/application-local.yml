@@ -44,8 +44,10 @@ logging:
   level:
     root: INFO
     com.nazir.aiinvoice: DEBUG
+app:
+  kafka-enabled: false
 ai:
-  provider: local # Options: mock, local, openai, hybrid, ollama
+  provider: local # Options: local, openai, ollama
   openai:
     api-key: ${OPENAI_API_KEY:}
     model: gpt-3.5-turbo

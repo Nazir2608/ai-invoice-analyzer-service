@@ -117,22 +117,17 @@ InvoiceEventConsumer (Kafka Listener)
 
 ### 3.2 AI Extraction & Risk Analysis
 
-AI extraction is routed via a strategy:
-
-- Configured in `AiStrategyConfig`.
-- Selected using the property `ai.provider`:
+AI extraction is routed via a strategy configured in `AiStrategyConfig` and selected using the property `ai.provider`:
 
 ```text
-ai.provider = mock | local | openai | hybrid | ollama
+ai.provider = local | openai | ollama
 ```
 
 Supported strategies:
 
-- `mock` – simple mock for demos
-- `local` – regex‑based extractor (no external AI dependency)
+- `local` – regex‑based extractor (no external AI dependency, runs fully locally)
 - `openai` – calls OpenAI Chat Completions API
-- `ollama` – calls local Ollama instance over HTTP
-- `hybrid` – local first, then escalate to OpenAI if data is insufficient
+- `ollama` – calls local Ollama instance over HTTP (Docker setup)
 
 Extraction flow (for AI providers):
 

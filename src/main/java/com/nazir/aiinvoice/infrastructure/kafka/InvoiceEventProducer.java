@@ -3,12 +3,14 @@ package com.nazir.aiinvoice.infrastructure.kafka;
 import com.nazir.aiinvoice.application.event.InvoiceUploadedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
 @Service
+@ConditionalOnProperty(name = "app.kafka-enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 @Slf4j
 public class InvoiceEventProducer {
