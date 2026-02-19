@@ -28,8 +28,7 @@ public class InvoiceEventConsumer {
     @PostConstruct
     void initMetrics() {
         invoiceConsumedCounter = Counter.builder("invoice.upload.consumed.total")
-                .description("Total invoices consumed from Kafka")
-                .register(meterRegistry);
+                .description("Total invoices consumed from Kafka").register(meterRegistry);
     }
 
     @KafkaListener(topics = "invoice-uploaded", groupId = "invoice-group")

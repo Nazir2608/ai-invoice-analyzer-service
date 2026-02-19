@@ -6,7 +6,6 @@ import lombok.Setter;
 @Getter
 @Setter
 public class InvoiceUpdateRequest {
-
     private String vendorName;
     private String invoiceNumber;
 }

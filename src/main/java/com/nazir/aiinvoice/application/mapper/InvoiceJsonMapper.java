@@ -24,10 +24,8 @@ public class InvoiceJsonMapper {
         if (data.has("billToAddress")) invoice.setBillToAddress(getText(data, "billToAddress"));
         if (data.has("invoiceNumber")) invoice.setInvoiceNumber(getText(data, "invoiceNumber"));
         if (data.has("currency")) invoice.setCurrency(getText(data, "currency"));
-
         if (data.has("invoiceDate")) invoice.setInvoiceDate(getDate(data, "invoiceDate"));
         if (data.has("dueDate")) invoice.setDueDate(getDate(data, "dueDate"));
-
         if (data.has("subtotal")) invoice.setSubtotal(getDecimal(data, "subtotal"));
         if (data.has("taxAmount")) invoice.setTaxAmount(getDecimal(data, "taxAmount"));
         if (data.has("totalAmount")) invoice.setTotalAmount(getDecimal(data, "totalAmount"));
@@ -44,7 +42,6 @@ public class InvoiceJsonMapper {
             BigDecimal quantity = getDecimal(itemNode, "quantity");
             BigDecimal unitPrice = getDecimal(itemNode, "unitPrice");
             BigDecimal lineTotal = getDecimal(itemNode, "lineTotal");
-
             InvoiceItem item = InvoiceItem.builder()
                     .invoice(invoice)
                     .name(description)
@@ -52,7 +49,6 @@ public class InvoiceJsonMapper {
                     .price(unitPrice)
                     .lineTotal(lineTotal)
                     .build();
-
             invoice.getItems().add(item);
         }
     }

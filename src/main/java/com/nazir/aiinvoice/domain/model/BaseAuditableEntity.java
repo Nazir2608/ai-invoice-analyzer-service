@@ -16,14 +16,11 @@ public abstract class BaseAuditableEntity {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
     @Column(updatable = false)
     private String createdBy;
-
     private LocalDateTime updatedAt;
-
     private String updatedBy;
-
+    
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

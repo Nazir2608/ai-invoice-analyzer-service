@@ -10,7 +10,6 @@ import java.math.BigDecimal;
 @Builder
 @AllArgsConstructor
 public class InvoiceLineItemResponse {
-
     private String description;
     private BigDecimal quantity;
     private BigDecimal unitPrice;

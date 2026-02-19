@@ -10,7 +10,6 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 public class PagedResponse<T> {
-
     private List<T> content;
     private int page;
     private int size;

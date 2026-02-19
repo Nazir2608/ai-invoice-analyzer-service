@@ -26,9 +26,7 @@ public class InvoiceRiskService {
 
     @PostConstruct
     void initMetrics() {
-        duplicateCounter = Counter.builder("invoice.duplicate.total")
-                .description("Total duplicate invoices detected")
-                .register(meterRegistry);
+        duplicateCounter = Counter.builder("invoice.duplicate.total").description("Total duplicate invoices detected").register(meterRegistry);
     }
 
     public void applyRiskChecks(Invoice invoice) {
@@ -42,31 +40,17 @@ public class InvoiceRiskService {
         if (invoice.getId() == null) {
             return;
         }
-
         String vendorName = invoice.getVendorName();
         String invoiceNumber = invoice.getInvoiceNumber();
         BigDecimal totalAmount = invoice.getTotalAmount();
-
         if (vendorName == null || invoiceNumber == null) {
             return;
         }
-
         boolean duplicateByAllFields = false;
         if (totalAmount != null) {
-            duplicateByAllFields = repository.existsByVendorNameAndInvoiceNumberAndTotalAmountAndIdNot(
-                    vendorName,
-                    invoiceNumber,
-                    totalAmount,
-                    invoice.getId()
-            );
+            duplicateByAllFields = repository.existsByVendorNameAndInvoiceNumberAndTotalAmountAndIdNot(vendorName, invoiceNumber, totalAmount, invoice.getId());
         }
-
-        boolean duplicateByBasicFields = repository.existsByVendorNameAndInvoiceNumberAndIdNot(
-                vendorName,
-                invoiceNumber,
-                invoice.getId()
-        );
-
+        boolean duplicateByBasicFields = repository.existsByVendorNameAndInvoiceNumberAndIdNot(vendorName, invoiceNumber, invoice.getId());
         if (duplicateByAllFields || duplicateByBasicFields) {
             addRiskFlag(invoice, InvoiceRiskConstants.RISK_POSSIBLE_DUPLICATE);
             log.info("event=duplicate_invoice_detected vendorName={} invoiceNumber={} totalAmount={} invoiceId={}",
@@ -82,11 +66,9 @@ public class InvoiceRiskService {
         BigDecimal subtotal = invoice.getSubtotal();
         BigDecimal taxAmount = invoice.getTaxAmount();
         BigDecimal totalAmount = invoice.getTotalAmount();
-
         if (subtotal == null || taxAmount == null || totalAmount == null) {
             return;
         }
-
         BigDecimal calculated = subtotal.add(taxAmount);
         if (calculated.compareTo(totalAmount) != 0) {
             addRiskFlag(invoice, InvoiceRiskConstants.RISK_AMOUNT_MISMATCH);

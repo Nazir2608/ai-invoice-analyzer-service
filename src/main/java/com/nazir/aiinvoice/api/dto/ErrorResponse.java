@@ -10,7 +10,6 @@ import java.time.LocalDateTime;
 @Builder
 @AllArgsConstructor
 public class ErrorResponse {
-
     private LocalDateTime timestamp;
     private int status;
     private String error;

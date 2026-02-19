@@ -7,7 +7,6 @@ import lombok.Setter;
 @Getter
 @Setter
 public class InvoiceCreateRequest {
-
     @NotBlank
     private String vendorName;
     @NotBlank

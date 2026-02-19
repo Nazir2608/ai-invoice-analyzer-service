@@ -18,11 +18,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Invoice extends BaseAuditableEntity {
-
     @Id
     @GeneratedValue
     private UUID id;
-
     private String vendorName;
     private String vendorEmail;
     private String vendorAddress;
@@ -43,9 +41,7 @@ public class Invoice extends BaseAuditableEntity {
     private String reviewReason;
     @Enumerated(EnumType.STRING)
     private InvoiceStatus status;
-
     private String fileUrl;
-
     @Column(columnDefinition = "TEXT")
     private String extractedRawText;
     @Column(columnDefinition = "TEXT")

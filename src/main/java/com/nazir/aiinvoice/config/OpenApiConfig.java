@@ -21,7 +21,6 @@ import org.springframework.context.annotation.Configuration;
         }
 )
 public class OpenApiConfig {
-
     @Bean
     public GroupedOpenApi invoiceApi() {
         return GroupedOpenApi.builder().group("invoices").pathsToMatch("/api/invoices/**").build();

@@ -1,7 +1,6 @@
 package com.nazir.aiinvoice.domain.model;
 
 public enum InvoiceEventType {
-
     FILE_UPLOADED,
     TEXT_EXTRACTED,
     AI_STARTED,

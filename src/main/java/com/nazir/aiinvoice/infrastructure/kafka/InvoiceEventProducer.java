@@ -20,9 +20,7 @@ public class InvoiceEventProducer {
 
     public void publishInvoiceUploaded(UUID invoiceId) {
         InvoiceUploadedEvent event = new InvoiceUploadedEvent(invoiceId);
-
         kafkaTemplate.send(TOPIC, invoiceId.toString(), event);
-
         log.info("event=invoice_uploaded_published invoiceId={}", invoiceId);
     }
 }

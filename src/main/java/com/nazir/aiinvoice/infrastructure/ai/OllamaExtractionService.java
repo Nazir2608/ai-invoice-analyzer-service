@@ -82,9 +82,7 @@ public class OllamaExtractionService implements AiExtractionStrategy {
             }
             invoice.setExtractedRawText(text);
             invoiceEventService.record(invoiceId, InvoiceEventType.TEXT_EXTRACTED, "Text extracted from document");
-            String jsonResponse = ollamaTimer != null
-                    ? ollamaTimer.record(() -> callOllama(text))
-                    : callOllama(text);
+            String jsonResponse = ollamaTimer != null ? ollamaTimer.record(() -> callOllama(text)) : callOllama(text);
             updateInvoiceFromJson(invoice, jsonResponse);
             String summary = generateSummary(text);
             invoice.setAiSummary(summary);
@@ -143,14 +141,7 @@ public class OllamaExtractionService implements AiExtractionStrategy {
 
                 Text:
                 """ + text;
-
-        Map<String, Object> requestBody = Map.of(
-                "model", model,
-                "prompt", prompt,
-                "stream", false,
-                "format", "json"
-        );
-
+        Map<String, Object> requestBody = Map.of("model", model, "prompt", prompt, "stream", false, "format", "json");
         String responseBody = restClientBuilder.build()
                 .post()
                 .uri(ollamaUrl + "/api/generate")
@@ -165,7 +156,6 @@ public class OllamaExtractionService implements AiExtractionStrategy {
     private void updateInvoiceFromJson(Invoice invoice, String responseBody) throws JsonProcessingException {
         JsonNode root = objectMapper.readTree(responseBody);
         JsonNode responseNode = root.path("response");
-        
         String content;
         if (responseNode.isMissingNode()) {
             if (root.has("vendorName")) {
@@ -179,9 +169,7 @@ public class OllamaExtractionService implements AiExtractionStrategy {
 
         String cleaned = invoiceJsonMapper.cleanContent(content);
         JsonNode data = objectMapper.readTree(cleaned);
-
         invoiceJsonMapper.applyBasicFields(invoice, data);
-
         if (data.has("lineItems")) {
             invoiceJsonMapper.applyLineItems(invoice, data.get("lineItems"));
         }
@@ -197,13 +185,7 @@ public class OllamaExtractionService implements AiExtractionStrategy {
 
                     Text:
                     """ + text;
-
-            Map<String, Object> requestBody = Map.of(
-                    "model", model,
-                    "prompt", prompt,
-                    "stream", false
-            );
-
+            Map<String, Object> requestBody = Map.of("model", model, "prompt", prompt, "stream", false);
             String responseBody = restClientBuilder.build()
                     .post()
                     .uri(ollamaUrl + "/api/generate")
@@ -211,7 +193,6 @@ public class OllamaExtractionService implements AiExtractionStrategy {
                     .body(requestBody)
                     .retrieve()
                     .body(String.class);
-
             JsonNode root = objectMapper.readTree(responseBody);
             JsonNode responseNode = root.path("response");
             if (responseNode.isMissingNode()) {

@@ -130,8 +130,7 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
                 "messages", List.of(
                         Map.of("role", "system", "content", "You are a helpful assistant that extracts data from invoices."),
                         Map.of("role", "user", "content", prompt)
-                ),
-                "temperature", 0.1
+                ), "temperature", 0.1
         );
 
         return restClientBuilder.build()
@@ -150,12 +149,10 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
         if (!choicesNode.isArray() || choicesNode.isEmpty()) {
             throw new AiExtractionException("Invalid OpenAI response: missing choices");
         }
-
         JsonNode contentNode = choicesNode.get(0).path("message").path("content");
         if (contentNode.isMissingNode()) {
             throw new AiExtractionException("Invalid OpenAI response: missing content");
         }
-
         String content = contentNode.asText();
         String cleaned = invoiceJsonMapper.cleanContent(content);
         JsonNode data = objectMapper.readTree(cleaned);

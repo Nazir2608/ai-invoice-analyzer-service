@@ -10,7 +10,6 @@ import java.math.BigDecimal;
 @Builder
 @AllArgsConstructor
 public class DashboardResponse {
-
     private long totalInvoices;
     private BigDecimal totalAmount;
     private long duplicateCount;

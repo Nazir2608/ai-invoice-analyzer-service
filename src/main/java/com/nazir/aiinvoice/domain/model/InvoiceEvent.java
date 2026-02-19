@@ -20,16 +20,12 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class InvoiceEvent extends BaseAuditableEntity {
-
     @Id
     @GeneratedValue
     private UUID id;
-
     private UUID invoiceId;
-
     @Enumerated(EnumType.STRING)
     private InvoiceEventType eventType;
-
     private String message;
 }
 
