@@ -53,10 +53,30 @@ ai:
     model: gpt-3.5-turbo
   ollama:
     url: http://localhost:11434
-    model: gemma3:4b 
+    model: gemma3:4b
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics,prometheus
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      aiService:
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 2
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  retry:
+    instances:
+      aiService:
+        maxAttempts: 3
+        waitDuration: 2s
+  timelimiter:
+    instances:
+      aiService:
+        timeoutDuration: 20s

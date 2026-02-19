@@ -383,6 +383,20 @@ To use OpenAI in Docker:
 - Change `AI_PROVIDER: openai`.
 - Add `OPENAI_API_KEY` to `invoice-app.environment`.
 
+### Resilience4j for AI extraction
+
+External AI providers (OpenAI, Ollama) are protected with Resilience4j:
+
+- Circuit breaker `aiService`
+- Retry `aiService`
+
+Behavior:
+
+- If AI fails 5 times, the circuit opens for 30 seconds.
+- Each AI call can be retried up to 2 extra times (3 attempts total).
+
+Configuration is in `application.yml` under `resilience4j.circuitbreaker.instances.aiService` and `resilience4j.retry.instances.aiService`.
+
 ---
 
 ## 6. API Overview

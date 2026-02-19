@@ -12,10 +12,12 @@ import com.nazir.aiinvoice.domain.model.InvoiceStatus;
 import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.domain.strategy.AiExtractionStrategy;
 import com.nazir.aiinvoice.exception.AiExtractionException;
+import com.nazir.aiinvoice.exception.ResourceNotFoundException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
-import com.nazir.aiinvoice.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -61,6 +64,8 @@ public class OllamaExtractionService implements AiExtractionStrategy {
     }
 
     @Override
+    @Retry(name = "aiService", fallbackMethod = "fallback")
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallback")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void extract(UUID invoiceId) {
         Invoice invoice = repository.findById(invoiceId).orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
@@ -99,6 +104,16 @@ public class OllamaExtractionService implements AiExtractionStrategy {
             log.error("event=ollama_extraction_failed invoiceId={}", invoiceId, e);
             invoiceEventService.record(invoiceId, InvoiceEventType.PROCESSING_FAILED, "Ollama extraction failed: " + e.getMessage());
             markFailed(invoice);
+        }
+    }
+
+    public void fallback(UUID invoiceId, Throwable ex) {
+        log.error("event=ollama_extraction_failed_fallback invoiceId={} reason={}", invoiceId, ex.getMessage());
+        Invoice invoice = repository.findById(invoiceId).orElse(null);
+        if (invoice != null) {
+            invoice.setStatus(InvoiceStatus.FAILED);
+            repository.save(invoice);
+            invoiceEventService.record(invoiceId, InvoiceEventType.PROCESSING_FAILED, "Ollama extraction fallback executed: " + ex.getMessage());
         }
     }
 

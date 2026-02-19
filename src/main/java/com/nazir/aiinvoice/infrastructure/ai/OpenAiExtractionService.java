@@ -13,6 +13,8 @@ import com.nazir.aiinvoice.domain.repository.InvoiceRepository;
 import com.nazir.aiinvoice.domain.strategy.AiExtractionStrategy;
 import com.nazir.aiinvoice.exception.AiExtractionException;
 import com.nazir.aiinvoice.exception.ResourceNotFoundException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -46,6 +49,8 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
     private static final String OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
     @Override
+    @Retry(name = "aiService", fallbackMethod = "fallback")
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallback")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void extract(UUID invoiceId) {
         Invoice invoice = repository.findById(invoiceId).orElseThrow(() -> new ResourceNotFoundException("Invoice not found: " + invoiceId));
@@ -86,6 +91,16 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
             log.error("event=openai_extraction_failed invoiceId={}", invoiceId, e);
             invoiceEventService.record(invoiceId, InvoiceEventType.PROCESSING_FAILED, "OpenAI extraction failed: " + e.getMessage());
             markFailed(invoice);
+        }
+    }
+
+    public void fallback(UUID invoiceId, Throwable ex) {
+        log.error("event=openai_extraction_failed_fallback invoiceId={} reason={}", invoiceId, ex.getMessage());
+        Invoice invoice = repository.findById(invoiceId).orElse(null);
+        if (invoice != null) {
+            invoice.setStatus(InvoiceStatus.FAILED);
+            repository.save(invoice);
+            invoiceEventService.record(invoiceId, InvoiceEventType.PROCESSING_FAILED, "OpenAI extraction fallback executed: " + ex.getMessage());
         }
     }
 
