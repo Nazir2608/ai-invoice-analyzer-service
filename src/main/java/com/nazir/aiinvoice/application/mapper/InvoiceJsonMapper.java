@@ -15,7 +15,6 @@ import java.time.format.DateTimeFormatter;
 @RequiredArgsConstructor
 @Slf4j
 public class InvoiceJsonMapper {
-
     public void applyBasicFields(Invoice invoice, JsonNode data) {
         if (data.has("vendorName")) invoice.setVendorName(getText(data, "vendorName"));
         if (data.has("vendorEmail")) invoice.setVendorEmail(getText(data, "vendorEmail"));

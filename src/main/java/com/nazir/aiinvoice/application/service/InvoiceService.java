@@ -114,7 +114,6 @@ public class InvoiceService {
         long duplicateCount = repository.countByRiskFlagContaining(InvoiceRiskConstants.RISK_POSSIBLE_DUPLICATE);
         long overdueCount = repository.countByPaymentStatus(InvoiceRiskConstants.PAYMENT_STATUS_OVERDUE);
         long requiresReviewCount = repository.countRequiresReview();
-
         return DashboardResponse.builder()
                 .totalInvoices(totalInvoices)
                 .totalAmount(totalAmount)
