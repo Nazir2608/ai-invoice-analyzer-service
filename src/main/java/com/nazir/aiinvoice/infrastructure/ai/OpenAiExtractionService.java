@@ -24,7 +24,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -46,7 +45,10 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
     private String apiKey;
     @Value("${ai.openai.model:gpt-3.5-turbo}")
     private String model;
-    private static final String OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+    @Value("${ai.openai.url:https://api.openai.com/v1/chat/completions}")
+    private String openAiUrl;
+    @Value("${ai.openai.temperature:0.1}")
+    private double temperature;
 
     @Override
     @Retry(name = "aiService", fallbackMethod = "fallback")
@@ -130,12 +132,13 @@ public class OpenAiExtractionService implements AiExtractionStrategy {
                 "messages", List.of(
                         Map.of("role", "system", "content", "You are a helpful assistant that extracts data from invoices."),
                         Map.of("role", "user", "content", prompt)
-                ), "temperature", 0.1
+                ),
+                "temperature", temperature
         );
 
         return restClientBuilder.build()
                 .post()
-                .uri(OPENAI_URL)
+                .uri(openAiUrl)
                 .header("Authorization", "Bearer " + apiKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(requestBody)

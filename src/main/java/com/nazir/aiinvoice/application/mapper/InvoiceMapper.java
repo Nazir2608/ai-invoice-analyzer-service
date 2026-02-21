@@ -6,7 +6,6 @@ import com.nazir.aiinvoice.api.dto.InvoiceResponse;
 import com.nazir.aiinvoice.domain.model.Invoice;
 import com.nazir.aiinvoice.domain.model.InvoiceItem;
 import com.nazir.aiinvoice.domain.model.InvoiceStatus;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;

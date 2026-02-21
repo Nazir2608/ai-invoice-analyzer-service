@@ -3,30 +3,24 @@ spring:
     name: ai-invoice-analyzer-service
 
   datasource:
-    url: jdbc:mysql://localhost:3306/invoice_analyzer?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-    username: root
-    password: MySql@123
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/invoice_analyzer?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:MySql@123}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
     show-sql: false
     properties:
       hibernate:
         format_sql: true
 
-  servlet:
-    multipart:
-      enabled: true
-      max-file-size: 10MB
-      max-request-size: 10MB
-
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
-      group-id: invoice-group
-      auto-offset-reset: earliest
+      group-id: ${SPRING_KAFKA_CONSUMER_GROUP_ID:invoice-group}
+      auto-offset-reset: ${SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET:earliest}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
@@ -36,26 +30,28 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   ssl:
-    enabled: false
+    enabled: ${SERVER_SSL_ENABLED:false}
 
 logging:
   level:
     root: INFO
-    com.nazir.aiinvoice: DEBUG
+    com.nazir.aiinvoice: INFO
+
 app:
-  kafka-enabled: false
+  kafka-enabled: true
+
 ai:
-  provider: local # Options: local, openai, ollama
+  provider: ${AI_PROVIDER:ollama}
   openai:
     api-key: ${OPENAI_API_KEY:}
-    model: gpt-3.5-turbo
-    url: https://api.openai.com/v1/chat/completions
-    temperature: 0.1
+    model: ${AI_OPENAI_MODEL:gpt-3.5-turbo}
+    url: ${AI_OPENAI_URL:https://api.openai.com/v1/chat/completions}
+    temperature: ${AI_OPENAI_TEMPERATURE:0.1}
   ollama:
-    url: http://localhost:11434
-    model: gemma3:4b
+    url: ${AI_OLLAMA_URL:http://ollama:11434}
+    model: ${AI_OLLAMA_MODEL:gemma3:4b}
 
 management:
   endpoints:
@@ -67,12 +63,13 @@ resilience4j:
   circuitbreaker:
     instances:
       aiService:
-        slidingWindowSize: 5
-        minimumNumberOfCalls: 5
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
         failureRateThreshold: 50
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 2
         automaticTransitionFromOpenToHalfOpenEnabled: true
+        registerHealthIndicator: true
   retry:
     instances:
       aiService:
