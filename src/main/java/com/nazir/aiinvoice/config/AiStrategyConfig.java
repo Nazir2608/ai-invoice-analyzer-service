@@ -15,11 +15,7 @@ public class AiStrategyConfig {
 
     @Bean
     @Primary
-    public AiExtractionStrategy aiExtractionStrategy(
-            @Qualifier("localExtractionService") AiExtractionStrategy local,
-            @Qualifier("openAiExtractionService") AiExtractionStrategy openai,
-            @Qualifier("ollamaExtractionService") AiExtractionStrategy ollama
-    ) {
+    public AiExtractionStrategy aiExtractionStrategy(@Qualifier("localExtractionService") AiExtractionStrategy local, @Qualifier("openAiExtractionService") AiExtractionStrategy openai, @Qualifier("ollamaExtractionService") AiExtractionStrategy ollama) {
         return switch (aiProvider.toLowerCase()) {
             case "local", "regex" -> local;
             case "openai" -> openai;
